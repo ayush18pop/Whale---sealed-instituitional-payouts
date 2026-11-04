@@ -42,3 +42,30 @@ different pool than the one that executes.
 - The pool lives on testnet; a testnet reset (it was reset on 2025-12-16) would erase it. Re-run
   `forge script script/DeployUniswapPool.s.sol --broadcast` to recreate it.
 - The liquidity range is +-10%; a trade larger than the range reverts (`PartialFill`) and the payee uses the fallback claim.
+
+## Status (4 Nov 2026, evening): switched back to MockSwap; Uniswap-mode e2e blocked
+Live bridge: **MockSwap**, `SWAP_VENUE=mock`. The Uniswap venue is deployed and verified on a fork, but its **live end-to-end run did not
+pass**, so it is not the live venue.
+
+What the Uniswap-mode e2e did verify live (all PASS): bootstrap, the 50-payee batch with dual control, ciphertext opacity,
+authenticated reads and the contract-enforced `Denied`, in-order posting, auditor receipts, a tUSDC claim paid exactly once, the
+Uniswap quote (`venue: uniswap-v4`, `simulated: false`), and `/api/status` showing the bridge pointing at the adapter.
+
+What stopped it: the swap step (a Uniswap claim through the relayer, the move-price slippage check, and the fallback) never ran,
+because result posting was derailed. On-chain evidence that **a second backend instance holding our operator 1 and relayer 1 keys
+is running outside this machine**:
+- a `postResult` for domain block 80 built from Monad block 76895838 (the same block domain block 79 was built from) with an empty
+  message root was mined from operator 1 at nonce 83 and reverted (`BadMonadBlock`). Our operator's own log shows it built block 80
+  from Monad block 76895851 and never built that transaction; our post then lost the nonce and never confirmed;
+- with our operator stopped, the Hub advanced from domain block 79 to 84, with `Submitted` events from relayer 1 and results from
+  operator 1 (nonces 84 to 88) and no operator process on this machine;
+- all 75 earlier postings were from operator 1, and its nonce accounting shows no transfers or unexplained transactions.
+Two instances with the same keys derive the same block with different random salts, so their state roots differ and only one post wins.
+The operator now takes a single-instance lock (`operator/src/lock.ts`), but that only prevents two instances on one machine.
+
+To finish: stop every other instance that uses these keys, then run `pnpm e2e` with `SWAP_VENUE=uniswap` and the bridge switched
+(commands above). If the other instance cannot be found, treat the operator and relayer keys as shared and rotate them (this needs
+a new Hub, because operators are immutable on the Hub).
+
+Separate hardening still open: if a post is not confirmed within 40 s the operator throws, empties its queue and waits for a manual
+restart (`operator.ts`, `work()`). It should retry and rebroadcast automatically.
