@@ -53,29 +53,22 @@ On the day, replace `X` with the real median from the latest rehearsal and say "
 
 ## 3. Excalidraw diagram
 
-One canvas, built in layers so you can reveal it step by step (use frames, or build five copies each adding one step).
-Aspect ratio 16:9. Large text (min 28 px) because it is projected.
+File: **`docs/whale-architecture.excalidraw`** (open at excalidraw.com, or drag it into the app). 16:9-ish canvas,
+large text, one picture with no jargon in the shapes.
 
-**Layout**
+**How to present it:** show the whole diagram at once and point with Excalidraw's **laser pointer** (press `K`) from
+badge 1 to badge 5. This is more reliable on stage than revealing layers. Each beat is about 7 seconds.
 
-- Title (top-left): `How Whale works - Monad Private Settlement Domains pattern`
-- **Top band**, light blue fill, label `PUBLIC: Monad`. Inside: box **Hub** ("mailbox + notary: fixes the order,
-  stores receipts"), box **Vault (MainBridge)** ("holds the real tokens").
-- **Bottom band**, grey fill, label `PRIVATE: the domain`. Inside: box **Operator** ("decrypts, executes,
-  attests"), box **Private chain** ("balances, payouts, who sees what").
-- **Left column**, outside both bands: box **Browser** ("signs + encrypts") above box **Relayer** ("pays the gas").
-- Dashed arrows carry **ciphertext**; solid arrows carry **roots/receipts or money**.
+| Badge | Say | What it matches from the live demo |
+|---|---|---|
+| 1 | "The finance team signs the payout and seals it in an encrypted envelope." | The `Propose payout` click |
+| 2 | "Monad's mailbox puts it in order but can't open it. Our operator opens it and pays everyone, privately." | The left pane of the split screen: one transaction of bytes |
+| 3 | "Only a receipt goes back to Monad. That is what the auditor can verify." | The `Verified on Monad` check |
+| 4 | "Each employee sees only their own pay. The auditor sees what the company allows." | Payee A's view, and `Denied` for Payee B |
+| 5 | "To get real money, an employee withdraws from the vault, once, with a proof." | The (optional) withdraw beat |
 
-**Reveal order (about 7 seconds each)**
-
-1. **Browser -> Relayer.** "The payout is signed and encrypted in the browser."
-2. **Relayer -> Hub.** "Posted on Monad. The order is fixed publicly, the content stays sealed." (the left pane you saw)
-3. **Hub -> Operator -> Private chain.** "Our operator decrypts it and executes it privately. Balances live here."
-4. **Operator -> Hub (solid, labelled `roots`).** "Only a salted receipt goes back to Monad. That is what the auditor verifies."
-5. **Vault -> payee (solid, labelled `proof`).** "Withdrawing releases real tokens, once, against a proof."
-
-**Legend (bottom-right):** blue = public, grey = private, dashed = encrypted, solid = receipt or money.
-**Callout (right side, after step 5):** "Public sees: ciphertext. Payee sees: own pay. Auditor sees: everything granted."
+Colour code, so a first-time viewer reads it without help: **blue = public (Monad)**, **grey dashed = private**,
+**green = employees**, dashed arrow = receipt or audit view. The footer states that the operator is ours today.
 
 ## 4. Closing (10 seconds)
 
