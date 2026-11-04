@@ -70,8 +70,13 @@ Demo-readiness requirements:
 9. Demo controls: role switcher, Reset, latency timer, tx counter.
 
 ### Later phases (not MVP)
-- Payout currency choice: treasury holds two tokens, payee picks one, mock swap for rebalancing.
-- A real Uniswap swap or cross-chain exit (CCTP/CCIP): only after testnet availability is confirmed.
+- **Payout currency choice (Phase 7):** each payee may state a preferred `tokenOut`. The manager funds one
+  token; there is no hub-wide default currency. The swap happens at withdrawal through a `SwapAdapter`
+  (section 6.1). Demo uses `MockSwap`; a real Uniswap adapter only after testnet availability is confirmed.
+- **Recurring payouts (Phase 7, decision D6):** a backend scheduler auto-**proposes** each month's batch.
+  Whether approvals are still required is open. Monad scheduled transactions are listed as forthcoming in the
+  paper, so we do not rely on them.
+- A cross-chain exit: CCTP/USDC is the only candidate (section 12). Not before the core demo works.
 - Private oracle-priced pool.
 - Passkey login (P256 precompile at `0x0100`, Monad docs "Differences").
 - Key rotation / epochs.
@@ -115,6 +120,52 @@ gas sponsorship via a different payer (5.2.1).
 - Block cadence: one domain block per Monad block that has domain transactions (matches 5.2.2). Timestamps and
   randomness are not specified by the paper; we use block numbers and need no randomness.
 
+### 6.1 What is public, who signs what, and the claim-and-swap flow (Phase 7)
+
+**The Hub is public.** It is a contract on Monad: a mailbox and notary. It cannot decrypt anything. Only the
+operator holds the decryption key. Balances live on the private EVM, not in the Hub. Encrypting a transaction
+moves no money; money moves only through the public deposit into `MainBridge` and the proof-verified release.
+
+| Signer | Signs | Purpose |
+|---|---|---|
+| Payer (manager) | The batch transaction, in the browser, then encrypts it there | Authorises the payments; the backend cannot invent them |
+| Payee | Their withdrawal request inside the private chain: amount, `tokenOut`, `minOut`, `maxFee` | Fixes the terms of the payout |
+| Operator committee | The `(blockNo, stateRoot, msgRoot)` result | Attests the private chain executed correctly |
+| Relayer | The Monad transaction that calls the Hub | Pays MON gas |
+| Hub / MainBridge / SwapAdapter | Nothing (contracts cannot sign) | Verify and execute inside the relayer's transaction |
+
+If the relayer and operator are the same server, browser-side encryption protects against the public and Monad,
+not against our own backend. This is disclosed.
+
+**Claim-and-swap, one Monad transaction:**
+
+```
+Relayer -> Hub.claim(proof, terms) -> MainBridge.release -> SwapAdapter.swap -> DEX router
+                                            then: pay relayer fee, send remainder to payee
+```
+
+1. Payee's private withdrawal request carries `tokenOut`, `minOut`, `maxFee`. These are part of the Merkle
+   leaf, so the operator cannot change the recipient or the minimum.
+2. The Hub verifies the proof against an accepted message root and checks replay protection.
+3. `MainBridge` calls `SwapAdapter`, which approves the **exact** amount to the router and swaps. It reverts if
+   output is below `minOut`.
+4. A fee in the output token, capped at `maxFee`, repays the relayer. The payee never needs MON.
+5. **Fallback:** if the swap reverts, the payee may claim the original token instead, because withdrawals must
+   never be blockable (white paper 5.5.3).
+
+| Cost | Paid by |
+|---|---|
+| DEX pool fee | Payee (taken from the swap) |
+| Price movement | Payee, bounded by `minOut` |
+| MON gas | Relayer up front (Monad charges the gas **limit**) |
+| Relayer reimbursement | Payee, as a stablecoin fee deducted from the payout, capped at `maxFee` |
+
+The MON-to-stablecoin conversion uses a **flat fee** in the demo (no live oracle). The swap itself is public on
+Monad. A public swap can be sandwiched, hence `minOut`.
+
+`SwapAdapter` is separate from the Hub so the Hub stays small and the DEX can be replaced. Only `MainBridge` may
+call it. Demo: `MockSwap` with the same interface.
+
 ## 7. Verified platform constraints (from docs.monad.xyz)
 
 | Fact | Value | Design consequence |
@@ -150,6 +201,10 @@ Correction to earlier chat: I quoted Monad block time as 400 ms. The docs state 
 | FR9 | Withdrawal pays out on Monad exactly once | A second claim of the same leaf reverts |
 | FR10 | Reset restores the opening state | After Reset, a fresh run behaves identically |
 | FR11 | The timer shows measured submit-to-confirmed latency | Value is computed from real timestamps, not hard-coded |
+| FR12 | (Phase 7) Withdrawal with a swap pays the payee `tokenOut` | Payee receives >= `minOut`; relayer fee <= `maxFee` |
+| FR13 | (Phase 7) A swap below `minOut` reverts | Move the mock price; claim reverts |
+| FR14 | (Phase 7) Fallback claim in the original token works after a failed swap | Claim succeeds with `tokenIn` |
+| FR15 | (Phase 7) `SwapAdapter` is callable only by `MainBridge` | Direct call from any other address reverts |
 
 ## 9. Non-functional requirements
 
@@ -178,15 +233,24 @@ operator-relayed; (3) on-chain dual control -> backend-enforced.
 |---|---|---|
 | D1 | Private chain: real `anvil` vs in-memory ledger | `anvil`: runs real EVM bytecode, so the contracts are the real thing. Fall back to a ledger only if throughput fails the spike |
 | D2 | Run the domain's anvil in Monad mode (`--network monad`) or plain | Monad mode matches the paper ("an extension of the Monad client"), but Monad mode was measurably slower in `forge test` (2.8 s vs 1.1 s for one test). **Measure in the Phase 2 spike, then decide** |
-| D3 | Stablecoin: our `TestUSDC` vs a testnet USDC | `TestUSDC` (open mint, no faucet dependency). A testnet USDC address was not in the docs' address table |
+| D3 | Stablecoin: our `TestUSDC` vs Circle's testnet USDC | `TestUSDC` (open mint, no faucet dependency). Circle lists a Monad testnet USDC at `0x534b2f3A21130d7a60830c2Df862319e593943A3` (developers.circle.com, USDC contract addresses); more convincing but depends on a faucet |
 | D4 | Who funds the deployer and relayers | A funded testnet key via `faucet.monad.xyz`. Needs the team's wallet |
 | D5 | Role split between people / subagents | Contracts + frontend: lead. Operator + backend: Sonnet subagent (Opus only if it stalls) |
+| D6 | Recurring payouts: do auto-proposed monthly batches still need 2 approvals? | Yes for the demo (keeps dual control visible); revisit later |
+| D7 | Relayer reimbursement at claim: flat fee vs oracle-priced | Flat fee for the demo |
 
 ## 12. Unverified (do not state as fact until checked)
 
 - Whether a USDC/USDT pool with liquidity exists on Monad **testnet** (mainnet Uniswap addresses are listed;
   testnet pools were not checked).
-- Whether CCTP or CCIP lanes exist on Monad **testnet**.
+- **CCTP** (Circle's USDC burn-and-mint): Monad is a supported domain, ID 15; standard transfer works; Fast
+  Transfer is N/A as a source; Monad testnet is supported except upfront fees (Circle "supported blockchains").
+  Testnet CCTP contract addresses were **not found**.
+- **CCIP** (Chainlink): a Monad Testnet directory page exists (router, chain selector, fee tokens LINK/WETH/WMON)
+  but showed **no registered tokens** and the lane destinations were not confirmed. Do not plan stablecoin
+  movement over CCIP on testnet.
+- Which DEX router and version is deployed on Monad **testnet** and its call interface (v3 vs v4 differ; Permit2
+  is a canonical testnet contract). Read the Uniswap docs when Phase 7 starts; do not write the adapter from memory.
 - Testnet block time and finality (docs figures are mainnet).
 - Any library API we have not yet read the docs for (viem WebSocket usage, ECIES library, Merkle tree library).
   Each is checked at the moment of use, in the phase that needs it.
