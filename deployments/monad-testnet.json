@@ -1,0 +1,53 @@
+{
+  "network": "monad-testnet",
+  "chainId": 10143,
+  "rpc": "https://testnet-rpc.monad.xyz",
+  "ws": "wss://testnet-rpc.monad.xyz",
+  "explorer": "https://testnet.monadscan.com",
+  "deployer": "0x7975E591c26e6c6D9B0CFd9A81f6d61A921C080c",
+  "contracts": {
+    "TestUSDC": {
+      "address": "0x439cf87fa1B8f1F414A1B5b754733A75e43467F7",
+      "txHash": "0x5d9f709082daa58774bb8a84bcef7c6ec011b2edc8a55df7e63a6e91169e1bcc",
+      "blockNumber": 76865037
+    },
+    "MainBridge": {
+      "address": "0xc4ED9A180D036580Ff04551a83DB41399C221484",
+      "txHash": "0x54f0ddc45146c8084c98c203ebabd9cffe7a6f68f2ca048d680903fc27d085c9",
+      "blockNumber": 76865044
+    },
+    "Hub": {
+      "address": "0xC859dbcd415a51e222c473B22Bbc479EC56fD713",
+      "txHash": "0xb9277e718bd447c6c7facea8de242d4f6c03c4be50fdfae5ea076c67855e2f37",
+      "blockNumber": 76865049
+    }
+  },
+  "hubConfig": {
+    "domainChainId": 7777,
+    "threshold": 2,
+    "operators": [
+      "0xd22A72cC336DB0Df2e7Dfb8D31708EFDb28eB52a",
+      "0x92b7C342F232fB2B268A98A581A8C511952Ca6D4",
+      "0xbAb0CC440c9883eA91dC9876244432FD77967a09"
+    ],
+    "operatorEncryptionPublicKey": "0x041b0dd50b8bab75cebf5ceb0f2f452500990b480482baff9720f5f833a1cd02c0f3242f21206abc622250754d1087ca4f25c3446cc459479bf39548363c681ad6",
+    "leafTypes": [
+      "uint8 kind",
+      "address payee",
+      "address token",
+      "uint256 amount",
+      "uint256 nonce",
+      "bytes32 salt"
+    ],
+    "withdrawalKind": 1
+  },
+  "accounts": {
+    "operatorResultSubmitter": "0xd22A72cC336DB0Df2e7Dfb8D31708EFDb28eB52a",
+    "relayers": [
+      "0x350AA5939E0763331A9263a366ddD1dF355053aA",
+      "0xA46Eef3A5EbF91B980D25E9b93B9C21Bba771cb9"
+    ],
+    "domainSystemRelayer": "0xFb5557F6365B447DfC1DbDF4cE4f4975331D0c0e"
+  },
+  "notes": "Operators 2 and 3 only sign. domainSystemRelayer mints on the private chain and needs no MON."
+}

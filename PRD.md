@@ -186,6 +186,18 @@ call it. Demo: `MockSwap` with the same interface.
 
 Correction to earlier chat: I quoted Monad block time as 400 ms. The docs state ~300 ms (observed, mainnet). Do not use 400 ms.
 
+### 7.1 Measured on Monad testnet (4 Nov 2026)
+
+| Measurement | Result | How / caveat |
+|---|---|---|
+| Block time | ~315 ms | 200 blocks in 63 s; timestamps are whole seconds, so approximate |
+| Receipt `gasUsed` for `Hub.submit` | equals the gas **limit** (100000) | Confirms Monad bills the limit; use tight limits |
+| `Hub.submit` send-to-receipt, 5 samples | median ~3.1 s (1.6-4.2 s) | **Not** chain speed: dominated by `cast send` polling for the receipt. Do not quote. Real inclusion latency is measured with a WebSocket subscription in Phase 2 |
+| Deploy cost (3 contracts + wiring) | ~0.63 MON at ~102 gwei | |
+| Gas for a 50-payee batch on the private chain | ~1.9M | forge test; limit is 30M |
+
+Only the block time is a defensible speed figure today.
+
 ## 8. Functional requirements
 
 | ID | Requirement | Acceptance test |
@@ -217,7 +229,7 @@ Correction to earlier chat: I quoted Monad block time as 400 ms. The docs state 
 | Phase | Work | Owner | Exit criterion |
 |---|---|---|---|
 | 0 | Repo, toolchain, config, interfaces | Lead | `forge test` passes in Monad mode; funded deployer on testnet; `anvil --network monad` verified. **Done up to funding.** |
-| 1 | Contracts: TestUSDC, MainBridge, Hub, DomainToken, Treasury + tests | Lead | All tests in FR6, FR7, FR9 green; deployed to testnet; addresses in `deployments.json`. **Status: code and 67 tests done (FR4-FR7, FR9 covered at contract level; a 50-payee batch executes in ~1.9M gas). Testnet deployment waits for operator keys + encryption key (Phase 2 setup).** |
+| 1 | Contracts: TestUSDC, MainBridge, Hub, DomainToken, Treasury + tests | Lead | All tests in FR6, FR7, FR9 green; deployed to testnet; addresses in `deployments.json`. **Status: code and 67 tests done (FR4-FR7, FR9 covered at contract level; a 50-payee batch executes in ~1.9M gas). **Deployed to Monad testnet on 4 Nov 2026** (TestUSDC, MainBridge, Hub; wiring read back on-chain). Addresses and config: `deployments/monad-testnet.json`.** |
 | 2 | Operator core loop (watch, decrypt, execute, roots, post) | Backend subagent | A script submits an encrypted batch; balances and the posted root are correct |
 | 3 | RPC proxy, relayer, receipt endpoint, event feed | Backend subagent | FR5 and FR8 pass against the running service |
 | 4 | Frontend: roles, split screen, timer, Reset (mock data first) | Lead / frontend | The demo script runs by clicking, against mocks |

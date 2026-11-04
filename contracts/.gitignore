@@ -18,3 +18,7 @@ docs/
 .env
 .env.*
 !.env.example
+
+# keep only run-latest.json as the deployment record
+/broadcast/**/run-[0-9]*.json
+*.recovery.lock
