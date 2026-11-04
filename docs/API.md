@@ -378,3 +378,20 @@ block gas limit.
 (`eth_estimateGas` for it: 137,856) is about 0.016 MON at the observed 102 gwei gas price (PRD 7.1's ~0.03 MON came from a looser limit);
 one full e2e run spent 0.356 MON on operator 1 (22 posts) and about 0.2 MON on the relayers.
 
+
+## 9. Running behind an ngrok tunnel (free tier)
+
+The API can be exposed with `ngrok http 8787`. The public URL changes on every ngrok restart, so it is **not** committed;
+read it from `http://127.0.0.1:4040/api/tunnels` on the machine running the tunnel.
+
+- **Every `fetch` must send `ngrok-skip-browser-warning: 1`.** Without it, ngrok's free tier returns its HTML warning page
+  (HTTP 200, `text/html`) to browser requests instead of JSON. The API's CORS configuration allows this header.
+- **WebSocket (`wss://<tunnel>/api/events`)** works through the tunnel without any header. A browser WebSocket cannot set
+  custom headers, so none is needed.
+- **CORS** allows only the origins in `CORS_ORIGIN` (comma separated; default `http://localhost:3000`). A frontend served
+  from another origin must be added there and the API restarted.
+- **Demo mode exposes keys.** With `DEMO_MODE=1`, `GET /api/demo/accounts` returns the demo accounts' private keys (testnet
+  only, mock tokens) to anyone who has the tunnel URL. Share the URL only with the team, and stop the tunnel when not
+  demoing. `DEMO_MODE=0` disables the endpoint.
+- Verified 4 Nov 2026 through a live tunnel: JSON from `/api/status`, CORS preflight with the skip header (204), 401 on
+  an unauthenticated private read, and a working WebSocket (`hello` message).

@@ -44,7 +44,7 @@ export async function startApi(op: Operator, relayer: Relayer) {
   const feedRing: FeedEvent[] = [];
   bus.on("feed", (e: FeedEvent) => { feedRing.push(e); if (feedRing.length > 100) feedRing.shift(); });
 
-  app.use("*", cors({ origin: CORS_ORIGIN.split(","), allowHeaders: ["content-type", "x-address", "x-timestamp", "x-signature", "authorization", "x-admin-token"], allowMethods: ["GET", "POST", "OPTIONS"], maxAge: 600 }));
+  app.use("*", cors({ origin: CORS_ORIGIN.split(","), allowHeaders: ["content-type", "x-address", "x-timestamp", "x-signature", "authorization", "x-admin-token", "ngrok-skip-browser-warning"], allowMethods: ["GET", "POST", "OPTIONS"], maxAge: 600 }));
   app.onError((e, c) => {
     if (e instanceof ApiError) return c.json({ error: e.code, message: e.message, ...(e.extra ?? {}) }, e.status as any);
     if (e instanceof AuthError) return c.json({ error: "unauthorized", message: e.message }, 401);
