@@ -7,19 +7,39 @@
   "deployer": "0x7975E591c26e6c6D9B0CFd9A81f6d61A921C080c",
   "contracts": {
     "TestUSDC": {
-      "address": "0x439cf87fa1B8f1F414A1B5b754733A75e43467F7",
-      "txHash": "0x5d9f709082daa58774bb8a84bcef7c6ec011b2edc8a55df7e63a6e91169e1bcc",
-      "blockNumber": 76865037
+      "address": "0xCd129C393926c15c432f9E751FCf3914d2143F10",
+      "txHash": "0xa16c482c03bd8e2ba3f0b0cd818cb5ce62682a1bd4a41039d3c083cf1a4399db",
+      "blockNumber": 76870813
+    },
+    "TestUSDT": {
+      "address": "0x1F2CF3e9875e737aF77e30530E8A65aC93189289",
+      "txHash": "0x47615920e45b59464123e78645171b1afd537824ab0b642828a31b8eb7e56734",
+      "blockNumber": 76870825
     },
     "MainBridge": {
-      "address": "0xc4ED9A180D036580Ff04551a83DB41399C221484",
-      "txHash": "0x54f0ddc45146c8084c98c203ebabd9cffe7a6f68f2ca048d680903fc27d085c9",
-      "blockNumber": 76865044
+      "address": "0xbB22bc6FE45ed8179E604444687a916f6d75Ec52",
+      "txHash": "0x0580ef01a4686e038a65779dcc01c6b7b8338e1b4b013fa6ab435e8abb33b069",
+      "blockNumber": 76870836
+    },
+    "MockSwap": {
+      "address": "0x82F5455f8Ef67f0E26676B59Db2351749A5F2373",
+      "txHash": "0xa5afe3425702079fc662f3c2fdd84fb1bb80be26f330bc0523b9fbc201f51474",
+      "blockNumber": 76870841
     },
     "Hub": {
-      "address": "0xC859dbcd415a51e222c473B22Bbc479EC56fD713",
-      "txHash": "0xb9277e718bd447c6c7facea8de242d4f6c03c4be50fdfae5ea076c67855e2f37",
-      "blockNumber": 76865049
+      "address": "0xBAf9C6f557605737bfBb28BE2b35Fb01B0898C9f",
+      "txHash": "0x8ff546448fb0583e22f007633c10a0da368208ba54fff0d0e251bb896c6bc429",
+      "blockNumber": 76870854
+    }
+  },
+  "tokens": {
+    "tUSDC": {
+      "address": "0xCd129C393926c15c432f9E751FCf3914d2143F10",
+      "decimals": 6
+    },
+    "tUSDT": {
+      "address": "0x1F2CF3e9875e737aF77e30530E8A65aC93189289",
+      "decimals": 6
     }
   },
   "hubConfig": {
@@ -31,15 +51,48 @@
       "0xbAb0CC440c9883eA91dC9876244432FD77967a09"
     ],
     "operatorEncryptionPublicKey": "0x041b0dd50b8bab75cebf5ceb0f2f452500990b480482baff9720f5f833a1cd02c0f3242f21206abc622250754d1087ca4f25c3446cc459479bf39548363c681ad6",
-    "leafTypes": [
-      "uint8 kind",
-      "address payee",
-      "address token",
-      "uint256 amount",
-      "uint256 nonce",
-      "bytes32 salt"
-    ],
-    "withdrawalKind": 1
+    "resultDigest": "Hub.resultDigest(domainBlock, monadBlock, stateRoot, msgRoot); sign with EIP-191 personal-sign over this digest as raw bytes32; signatures sorted by strictly ascending signer address",
+    "leafKinds": {
+      "1": {
+        "name": "withdrawal",
+        "hubFn": "claim",
+        "types": [
+          "uint8 kind",
+          "address payee",
+          "address token",
+          "uint256 amount",
+          "uint256 nonce",
+          "bytes32 salt"
+        ]
+      },
+      "2": {
+        "name": "swapWithdrawal",
+        "hubFns": [
+          "claimSwap",
+          "claimAsInput"
+        ],
+        "types": [
+          "uint8 kind",
+          "address payee",
+          "address tokenIn",
+          "address tokenOut",
+          "uint256 amountIn",
+          "uint256 minOut",
+          "uint256 maxFee",
+          "uint256 nonce",
+          "bytes32 salt"
+        ]
+      }
+    },
+    "merkle": "OpenZeppelin StandardMerkleTree (double-hashed leaves, sorted pairs); leaf hash must equal Hub.withdrawalLeaf / Hub.swapWithdrawalLeaf"
+  },
+  "swap": {
+    "adapter": "MockSwap (SIMULATED venue)",
+    "relayerFeeFlat": 50000,
+    "relayerFeeUnit": "output-token base units (6 decimals)",
+    "poolFeeBps": 5,
+    "rate": "1e18 in both directions",
+    "liquidityEachToken": "1000000000000"
   },
   "accounts": {
     "operatorResultSubmitter": "0xd22A72cC336DB0Df2e7Dfb8D31708EFDb28eB52a",
@@ -49,5 +102,27 @@
     ],
     "domainSystemRelayer": "0xFb5557F6365B447DfC1DbDF4cE4f4975331D0c0e"
   },
-  "notes": "Operators 2 and 3 only sign. domainSystemRelayer mints on the private chain and needs no MON."
+  "notes": "Operators 2 and 3 only sign. domainSystemRelayer mints on the private chain and needs no MON. Compare addresses case-insensitively or use checksummed form.",
+  "superseded": [
+    {
+      "reason": "pre-swap contracts; do not use",
+      "contracts": {
+        "TestUSDC": {
+          "address": "0x439cf87fa1B8f1F414A1B5b754733A75e43467F7",
+          "txHash": "0x5d9f709082daa58774bb8a84bcef7c6ec011b2edc8a55df7e63a6e91169e1bcc",
+          "blockNumber": 76865037
+        },
+        "MainBridge": {
+          "address": "0xc4ED9A180D036580Ff04551a83DB41399C221484",
+          "txHash": "0x54f0ddc45146c8084c98c203ebabd9cffe7a6f68f2ca048d680903fc27d085c9",
+          "blockNumber": 76865044
+        },
+        "Hub": {
+          "address": "0xC859dbcd415a51e222c473B22Bbc479EC56fD713",
+          "txHash": "0xb9277e718bd447c6c7facea8de242d4f6c03c4be50fdfae5ea076c67855e2f37",
+          "blockNumber": 76865049
+        }
+      }
+    }
+  ]
 }
