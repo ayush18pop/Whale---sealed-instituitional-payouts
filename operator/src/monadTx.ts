@@ -1,4 +1,4 @@
-import type { Address, Hex } from "viem";
+import { keccak256, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { monad } from "./clients.js";
 import { MONAD_CHAIN_ID } from "./config.js";
@@ -30,7 +30,7 @@ export class NonceSender {
   async resync() {
     this.next = await monad.getTransactionCount({ address: this.address, blockTag: "pending" });
   }
-  send(req: { to: Address; data: Hex; gas: bigint }): Promise<{ hash: Hex; sentAt: number; maxCost: bigint }> {
+  send(req: { to: Address; data: Hex; gas: bigint; onSigned?: (hash: Hex) => void }): Promise<{ hash: Hex; sentAt: number; maxCost: bigint }> {
     const run = async () => {
       const price = await gasPrice();
       const maxFeePerGas = (price * 12n) / 10n;
@@ -42,7 +42,10 @@ export class NonceSender {
             chainId: MONAD_CHAIN_ID, to: req.to, data: req.data, gas: req.gas, nonce, type: "eip1559",
             maxFeePerGas, maxPriorityFeePerGas: 1_000_000_000n, value: 0n,
           });
-          const hash = (await monad.request({ method: "eth_sendRawTransaction", params: [signed] })) as Hex;
+          const hash = keccak256(signed);
+          req.onSigned?.(hash); // lets the caller register the hash before the tx can possibly be included
+          const sent = (await monad.request({ method: "eth_sendRawTransaction", params: [signed] })) as Hex;
+          if (sent.toLowerCase() !== hash.toLowerCase()) throw new Error("node returned an unexpected tx hash");
           this.next = nonce + 1;
           return { hash, sentAt: Date.now(), maxCost: req.gas * maxFeePerGas };
         } catch (e) {

@@ -18,7 +18,7 @@ export interface MonadEvents {
  * Used only as a low-latency TRIGGER and head tracker; the authoritative event set for a block
  * is read with eth_getLogs (fetchBlockEvents) so completeness never depends on subscription delivery.
  * Reconnects with exponential backoff and emits "open" after each (re)connect so the consumer can catch up.
- * Emits: "head"(bigint), "logs"(bigint blockNumber, number count), "open", "close".
+ * Emits: "head"(bigint), "rawlog"(raw eth log object), "open", "close".
  */
 export class MonadWatcher extends EventEmitter {
   head = 0n;
@@ -66,7 +66,7 @@ export class MonadWatcher extends EventEmitter {
         const n = BigInt(r.number);
         if (n > this.head) { this.head = n; this.headSeenAt = Date.now(); this.emit("head", n); }
       } else if (r.blockNumber !== undefined) {
-        this.emit("logs", BigInt(r.blockNumber), 1);
+        this.emit("rawlog", r);
       }
     });
     const onDown = () => {

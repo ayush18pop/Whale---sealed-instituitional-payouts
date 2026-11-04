@@ -75,6 +75,7 @@ export interface DemoAccounts {
   payees: { address: Address; privateKey: Hex }[];
 }
 
+const blockCache = new Map<string, BlockRecord>();
 mkdirSync(join(DATA_DIR, "blocks"), { recursive: true });
 const P = {
   state: join(DATA_DIR, "state.json"),
@@ -92,11 +93,18 @@ export const store = {
   saveChain: (c: ChainInfo) => atomicWrite(P.chain, ser(c)),
   demo: (): DemoAccounts | null => (existsSync(P.demo) ? readJson<DemoAccounts>(P.demo, null as never) : null),
   saveDemo: (d: DemoAccounts) => atomicWrite(P.demo, ser(d)),
-  block: (d: bigint): BlockRecord | null => (existsSync(P.block(d)) ? readJson<BlockRecord>(P.block(d), null as never) : null),
-  saveBlock: (b: BlockRecord) => atomicWrite(P.block(b.domainBlock), ser(b)),
+  block: (d: bigint): BlockRecord | null => {
+    const c = blockCache.get(d.toString());
+    if (c) return c;
+    if (!existsSync(P.block(d))) return null;
+    const r = readJson<BlockRecord>(P.block(d), null as never);
+    blockCache.set(d.toString(), r);
+    return r;
+  },
+  saveBlock: (b: BlockRecord) => { atomicWrite(P.block(b.domainBlock), ser(b)); blockCache.set(b.domainBlock.toString(), b); },
   allBlocks: (): BlockRecord[] =>
     readdirSync(P.blocksDir)
       .filter((f) => f.endsWith(".json"))
-      .map((f) => readJson<BlockRecord>(join(P.blocksDir, f), null as never))
+      .map((f) => store.block(BigInt(f.slice(0, -5)))!)
       .sort((a, b) => (a.domainBlock < b.domainBlock ? -1 : 1)),
 };

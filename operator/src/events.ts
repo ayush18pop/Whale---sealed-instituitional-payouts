@@ -18,6 +18,7 @@ export type FeedEvent =
       postedAt: number; executedToPostedMs: number;
       txs: { id: Hex; receivedToPostedMs: number | null; includedToPostedMs: number }[];
     }
+  | { type: "reset"; epoch: number }
   | { type: "claimed"; kind: "claim" | "claimSwap" | "claimAsInput"; domainBlock: string; payee: string; tx: Hex; at: number; token?: string; amount?: string; nonce: string };
 
 export const emitFeed = (e: FeedEvent) => bus.emit("feed", e);

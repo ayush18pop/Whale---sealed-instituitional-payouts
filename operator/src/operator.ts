@@ -1,12 +1,12 @@
 import { EventEmitter } from "node:events";
 import {
-  encodeFunctionData, getAddress, keccak256, parseEventLogs, parseTransaction, type Address, type Hex,
+  decodeEventLog, encodeFunctionData, getAddress, keccak256, parseEventLogs, parseTransaction, type Address, type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { decryptTx } from "./crypto.js";
 import { ADDR, CRASH_AT, GAS, MONAD_CHAIN_ID, SYSTEM_RELAYER_ADDR, secrets, DOMAIN_CHAIN_ID } from "./config.js";
 import { domain, domainWallet, monad } from "./clients.js";
-import { domainTokenAbi, hubAbi, treasuryAbi } from "./abis.js";
+import { domainTokenAbi, hubAbi, mainBridgeAbi, treasuryAbi } from "./abis.js";
 import { bus, emitFeed, receivedAtById } from "./events.js";
 import { MonadWatcher, fetchBlockEvents, fetchRange, type MonadEvents } from "./monadWatch.js";
 import { NonceSender } from "./monadTx.js";
@@ -35,6 +35,14 @@ export class Operator extends EventEmitter {
   private waiters = new Map<string, (v: { tx: Hex; block: bigint }) => void>();
   private blockTasks = new Map<string, { seen: number; fetched: number; running: boolean; at: number }>();
   private idleResolvers: (() => void)[] = [];
+  private threshold = 2;
+  /** Local copy of Hub.lastDomainBlock: avoids a ~200 ms RPC round trip on the hot path. Updated from our own posts
+   *  and ResultPosted events; reset (re-read from chain) after any error. */
+  private hubLast: bigint | null = null;
+  private async lastDomain(): Promise<bigint> {
+    if (this.hubLast === null) this.hubLast = await monad.readContract({ address: ADDR.hub, abi: hubAbi, functionName: "lastDomainBlock" });
+    return this.hubLast;
+  }
   lastResult: { domainBlock: bigint; monadBlock: bigint; stateRoot: Hex; msgRoot: Hex; postTx: Hex } | null = null;
 
   constructor() {
@@ -48,11 +56,13 @@ export class Operator extends EventEmitter {
     if (!c) throw new Error("private chain not bootstrapped (run pnpm bootstrap)");
     this.chain = c;
     this.poster = new NonceSender(secrets.operators()[0]);
+    this.threshold = Number(await monad.readContract({ address: ADDR.hub, abi: hubAbi, functionName: "threshold" })); // immutable
+    this.hubLast = await monad.readContract({ address: ADDR.hub, abi: hubAbi, functionName: "lastDomainBlock" });
     await this.poster.warm();
     setInterval(() => void this.poster.warmGas(), 15_000).unref();
     await this.resumeInflight();
     if (opts.subscribe === false) { this.status = "idle"; return; }
-    this.watcher.on("logs", (b: bigint) => this.onLogBlock(b));
+    this.watcher.on("rawlog", (l: any) => this.onRawLog(l));
     this.watcher.on("open", () => this.catchUp().catch((e) => this.fail(e)));
     this.watcher.start();
     this.status = "idle";
@@ -60,6 +70,7 @@ export class Operator extends EventEmitter {
   stop() { this.watcher.stop(); }
 
   private fail(e: unknown) {
+    this.hubLast = null; // re-read from the chain on the next attempt
     this.lastError = String((e as Error)?.stack ?? e).slice(0, 2000);
     this.status = "error";
     log("ERROR", this.lastError);
@@ -88,6 +99,43 @@ export class Operator extends EventEmitter {
     const evs = await fetchRange(from, head);
     for (const e of evs) this.handleBlockEvents(e, Date.now());
   }
+
+  /**
+   * Fast path for WS log notifications. Submitted/Deposit only TRIGGER an authoritative eth_getLogs for that block
+   * (completeness never depends on subscription delivery). ResultPosted/Claimed* are handled straight from the payload.
+   */
+  private onRawLog(l: any) {
+    const b = BigInt(l.blockNumber);
+    const addr = String(l.address).toLowerCase();
+    let ev: { eventName: string; args: any } | null = null;
+    try {
+      if (addr === ADDR.hub.toLowerCase()) ev = decodeEventLog({ abi: hubAbi, data: l.data, topics: l.topics }) as any;
+      else if (addr === ADDR.bridge.toLowerCase()) ev = decodeEventLog({ abi: mainBridgeAbi, data: l.data, topics: l.topics }) as any;
+    } catch { return; }
+    if (!ev) return;
+    if (ev.eventName === "Submitted" || ev.eventName === "Deposit") return this.onLogBlock(b);
+    this.handleOther({ name: ev.eventName, txHash: l.transactionHash, logIndex: Number(l.logIndex), args: ev.args }, b);
+  }
+
+  private handleOther(o: { name: string; txHash: Hex; logIndex: number; args: any }, blockNumber: bigint) {
+    const key = `${o.txHash}:${o.logIndex}`;
+    if (this.otherSeen.has(key)) return;
+    this.otherSeen.add(key);
+    if (this.otherSeen.size > 2000) this.otherSeen.clear();
+    if (o.name === "ResultPosted") {
+      const d = BigInt(o.args.domainBlock);
+      if (this.hubLast === null || d > this.hubLast) this.hubLast = d;
+      const w = this.waiters.get(String(d));
+      if (w) w({ tx: o.txHash, block: blockNumber });
+    } else if (o.name === "Claimed" || o.name === "ClaimedSwap" || o.name === "ClaimedAsInput") {
+      emitFeed({
+        type: "claimed", kind: o.name === "Claimed" ? "claim" : o.name === "ClaimedSwap" ? "claimSwap" : "claimAsInput",
+        domainBlock: String(o.args.domainBlock), payee: o.args.payee, tx: o.txHash, at: Date.now(),
+        token: o.args.token ?? o.args.tokenIn, amount: String(o.args.amount ?? o.args.amountIn), nonce: String(o.args.nonce),
+      });
+    }
+  }
+  private otherSeen = new Set<string>();
 
   private onLogBlock(b: bigint) {
     const k = b.toString();
@@ -124,18 +172,8 @@ export class Operator extends EventEmitter {
     this.handled.add(key + ":" + ev.submitted.length + ":" + ev.deposits.length + ":" + ev.other.length);
     if (this.handled.size > 500) this.handled.clear();
 
-    for (const o of ev.other) {
-      if (o.name === "ResultPosted") {
-        const w = this.waiters.get(String(o.args.domainBlock));
-        if (w) w({ tx: o.txHash, block: ev.blockNumber });
-      } else if (o.name === "Claimed" || o.name === "ClaimedSwap" || o.name === "ClaimedAsInput") {
-        emitFeed({
-          type: "claimed", kind: o.name === "Claimed" ? "claim" : o.name === "ClaimedSwap" ? "claimSwap" : "claimAsInput",
-          domainBlock: String(o.args.domainBlock), payee: o.args.payee, tx: o.txHash, at: Date.now(),
-          token: o.args.token ?? o.args.tokenIn, amount: String(o.args.amount ?? o.args.amountIn), nonce: String(o.args.nonce),
-        });
-      }
-    }
+    this.emit("monadEvents", ev);
+    for (const o of ev.other) this.handleOther(o, ev.blockNumber);
     for (const s of ev.submitted) {
       const r = receivedAtById.get(s.id);
       emitFeed({ type: "included", id: s.id, monadBlock: ev.blockNumber.toString(), includedAt, receivedToIncludedMs: r ? includedAt - r : null });
@@ -182,9 +220,9 @@ export class Operator extends EventEmitter {
   /** Public so bootstrap and tests can drive a block deterministically. */
   async processMonadBlock(M: bigint, triggerAt = Date.now(), pre?: MonadEvents) {
     const startedAt = Date.now();
-    const lastD = await monad.readContract({ address: ADDR.hub, abi: hubAbi, functionName: "lastDomainBlock" });
-    const D = lastD + 1n;
+    const D = (await this.lastDomain()) + 1n;
     let rec = store.block(D);
+    const resumed = !!rec;
     if (rec && rec.monadBlock !== M) {
       // Block D already executed for another Monad block: the queue must be processed in order, so
       // this can only mean M was handled before D (a later retry). Skip if M already posted.
@@ -194,7 +232,7 @@ export class Operator extends EventEmitter {
       const ev = pre ?? (await fetchBlockEvents(M, 1));
       rec = await this.execute(D, M, ev, triggerAt, startedAt);
     }
-    await this.signAndPost(rec);
+    await this.signAndPost(rec, resumed);
     const st = store.state();
     st.cursorMonadBlock = M;
     store.saveState(st);
@@ -208,6 +246,7 @@ export class Operator extends EventEmitter {
     const lastD = await monad.readContract({ address: ADDR.hub, abi: hubAbi, functionName: "lastDomainBlock" });
     log(`resuming in-flight domain block ${D} (Monad ${M}, private start ${startPrivateBlock}); Hub last=${lastD}`);
     if (store.block(D)) { st.inflight = null; store.saveState(st); return; }
+    this.hubLast = lastD;
     if (lastD >= D) throw new Error(`Hub already at domain block ${lastD} but no local record for ${D}: cannot rebuild proofs`);
     const head = await domain.getBlockNumber();
     const ev = await fetchBlockEvents(M, 1);
@@ -339,10 +378,13 @@ export class Operator extends EventEmitter {
 
   // ------------------------------------------------------------------ attest and post
 
-  private async signAndPost(rec: BlockRecord) {
+  private async signAndPost(rec: BlockRecord, resumed = false) {
     const D = rec.domainBlock;
-    const lastD = await monad.readContract({ address: ADDR.hub, abi: hubAbi, functionName: "lastDomainBlock" });
-    if (lastD >= D) { await this.markPosted(rec, rec.postTx, undefined); return; } // already posted (restart)
+    if (resumed || rec.postTx || rec.timing.postedAt) { // restart path: the chain is the source of truth
+      const lastD = await monad.readContract({ address: ADDR.hub, abi: hubAbi, functionName: "lastDomainBlock" });
+      this.hubLast = lastD;
+      if (lastD >= D) { await this.markPosted(rec, rec.postTx, undefined); return; }
+    }
 
     // A previously sent post tx must be waited on, not re-sent (a duplicate would revert and burn fees).
     let postTx = rec.postTx;
@@ -353,7 +395,7 @@ export class Operator extends EventEmitter {
     }
     if (!postTx) {
       const digest = resultDigest({ hub: ADDR.hub, monadChainId: MONAD_CHAIN_ID, domainBlock: D, monadBlock: rec.monadBlock, stateRoot: rec.stateRoot, msgRoot: rec.msgRoot });
-      const threshold = Number(await monad.readContract({ address: ADDR.hub, abi: hubAbi, functionName: "threshold" }));
+      const threshold = this.threshold;
       const sigs: { signer: Address; signature: Hex }[] = [];
       for (const pk of secrets.operators()) { // OPERATOR_PK_1, _2, fall back to _3
         if (sigs.length >= threshold) break;
@@ -402,6 +444,7 @@ export class Operator extends EventEmitter {
     rec.timing.postedAt ??= now;
     if (postBlock) rec.postedMonadBlock = postBlock;
     store.saveBlock(rec);
+    if (this.hubLast === null || rec.domainBlock > this.hubLast) this.hubLast = rec.domainBlock;
     this.lastResult = { domainBlock: rec.domainBlock, monadBlock: rec.monadBlock, stateRoot: rec.stateRoot, msgRoot: rec.msgRoot, postTx: postTx ?? rec.postTx! };
     const postedAt = rec.timing.postedAt;
     emitFeed({
