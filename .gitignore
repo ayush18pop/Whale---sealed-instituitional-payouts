@@ -1,0 +1,16 @@
+# secrets and keys
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+keystores/
+# node / web
+node_modules/
+.next/
+dist/
+# local data
+operator/data/
+*.log
+# OS / editor
+.DS_Store
