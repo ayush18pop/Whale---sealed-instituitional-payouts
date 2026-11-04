@@ -1,29 +1,15 @@
-import { decodeErrorResult, encodeFunctionData, parseEventLogs, type Address, type Hex } from "viem";
+import { encodeFunctionData, parseEventLogs, type Address, type Hex } from "viem";
 import { ADDR, GAS, RELAYER_MAX_INFLIGHT, secrets } from "./config.js";
 import { monad } from "./clients.js";
-import { hubAbi, mainBridgeAbi, mockSwapAbi, testUSDCAbi } from "./abis.js";
+import { hubAbi, mainBridgeAbi } from "./abis.js";
+import { decodeRevert } from "./errors.js";
+export { decodeRevert };
 import { NonceSender } from "./monadTx.js";
 import { bus, emitFeed, receivedAtById, type FeedEvent } from "./events.js";
 import type { MsgLeaf } from "./merkle.js";
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string, public extra?: Record<string, unknown>) { super(message); }
-}
-
-/** Every custom error a Hub claim can bubble up (Hub, MainBridge, MockSwap, OZ SafeERC20/ERC20). */
-const ERR_ABIS = [hubAbi, mainBridgeAbi, mockSwapAbi, testUSDCAbi];
-export function decodeRevert(e: unknown): { name: string; args?: readonly unknown[]; raw?: Hex } | null {
-  let cur: any = e;
-  for (let i = 0; i < 8 && cur; i++, cur = cur.cause) {
-    const data: Hex | undefined = typeof cur.data === "string" ? cur.data : cur.data?.data ?? cur.raw;
-    if (typeof data === "string" && data.startsWith("0x") && data.length >= 10) {
-      for (const abi of ERR_ABIS) {
-        try { const d = decodeErrorResult({ abi: abi as any, data }); return { name: d.errorName, args: d.args as any }; } catch { /* next abi */ }
-      }
-      return { name: "UnknownError", raw: data };
-    }
-  }
-  return null;
 }
 
 /** Reserve-balance budget (PRD 7.1): cap in-flight fees per relayer. Monad bills the gas LIMIT, so budget by limit * price. */

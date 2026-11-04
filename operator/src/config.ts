@@ -59,18 +59,56 @@ export const ADDR = {
   hub: a(dep.contracts.Hub.address),
   bridge: a(dep.contracts.MainBridge.address),
   swap: a(dep.contracts.MockSwap.address),
+  uniAdapter: a(dep.contracts.UniswapV4Adapter.address),
+  seeder: a(dep.contracts.PoolSeeder.address),
   tUSDC: a(dep.tokens.tUSDC.address),
   tUSDT: a(dep.tokens.tUSDT.address),
   deployer: a(dep.deployer),
 };
 export const HUB_DEPLOY_BLOCK = BigInt(dep.contracts.Hub.blockNumber);
 export const MAINBRIDGE_DEPLOY_BLOCK = BigInt(dep.contracts.MainBridge.blockNumber);
-export const SWAP_INFO = {
-  adapter: "MockSwap",
-  simulated: true as const,
-  relayerFeeFlat: String(dep.swap.relayerFeeFlat),
-  poolFeeBps: dep.swap.poolFeeBps as number,
+
+/** Swap venue the live MainBridge is expected to use. Must match `MainBridge.swapAdapter()` (checked in /api/status). */
+const venueRaw = env("SWAP_VENUE", "mock").toLowerCase();
+if (venueRaw !== "mock" && venueRaw !== "uniswap") throw new Error(`SWAP_VENUE must be "mock" or "uniswap", got "${venueRaw}"`);
+export const SWAP_VENUE = venueRaw as "mock" | "uniswap";
+export const IS_UNI = SWAP_VENUE === "uniswap";
+
+const u = dep.uniswapV4;
+export const UNI = {
+  poolManager: a(u.poolManager),
+  stateView: a(u.stateView),
+  quoter: a(u.quoter),
+  poolId: u.pool.poolId as Hex,
+  key: {
+    currency0: a(u.pool.currency0),
+    currency1: a(u.pool.currency1),
+    fee: u.pool.fee as number,
+    tickSpacing: u.pool.tickSpacing as number,
+    hooks: a(u.pool.hooks),
+  },
+  tickLower: u.pool.range.tickLower as number,
+  tickUpper: u.pool.range.tickUpper as number,
+  initialSqrtPriceX96: BigInt(u.pool.initialSqrtPriceX96),
 };
+
+export const SWAP_INFO = IS_UNI
+  ? {
+      venue: "uniswap-v4" as const,
+      adapter: "UniswapV4Adapter",
+      adapterAddress: ADDR.uniAdapter,
+      simulated: false as const,
+      relayerFeeFlat: String(dep.swap.relayerFeeFlat),
+      poolFeeBps: UNI.key.fee / 100, // fee is in hundredths of a bip (500 = 0.05% = 5 bps)
+    }
+  : {
+      venue: "mock" as const,
+      adapter: "MockSwap",
+      adapterAddress: ADDR.swap,
+      simulated: true as const,
+      relayerFeeFlat: String(dep.swap.relayerFeeFlat),
+      poolFeeBps: dep.swap.poolFeeBps as number,
+    };
 
 /** Secrets: accessed only through these functions; never log their results. */
 export const secrets = {
