@@ -24,7 +24,7 @@ export function RoleGuide(p: {
       body = 'Upload who gets paid and how much. The batch is sealed in your browser before it leaves, then two approvers release it.';
       sees = 'The treasury, every batch you propose'; hidden = 'Monad sees sealed envelopes only';
       steps = [
-        { label: `Treasury funded${p.treasuryBalance ? ` · ${money(p.treasuryBalance)} pUSDC` : ''}`, done: !!p.treasuryBalance && BigInt(p.treasuryBalance) > 0n },
+        { label: 'Treasury funded', done: !!p.treasuryBalance && BigInt(p.treasuryBalance) > 0n },
         { label: 'Payout proposed', done: p.batches.length > 0 },
         { label: `Approved by ${p.threshold ?? 2} people`, done: executed.length > 0 },
         { label: 'Recipients paid privately', done: executed.length > 0 },

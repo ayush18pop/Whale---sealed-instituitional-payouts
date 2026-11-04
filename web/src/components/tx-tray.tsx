@@ -15,9 +15,10 @@ export type TrackedTx = {
 const PRIVATE_STAGES = ['Sent', 'On Monad', 'Executed in MPSD', 'Proven on Monad'];
 
 export function TxTray({ txs, onClear }: { txs: TrackedTx[]; onClear: () => void }) {
-  const [open, setOpen] = useState(true);
+  const [manual, setOpen] = useState<boolean | null>(null);
   if (!txs.length) return null;
   const live = txs.filter(t => t.stage < 4 && !t.failed).length;
+  const open = manual ?? live > 0;
   return (
     <motion.aside className="tray" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} aria-label="Your transactions">
       <button className="tray-head" onClick={() => setOpen(!open)} aria-expanded={open}>

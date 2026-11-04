@@ -126,9 +126,9 @@ export function LiveNetwork({ status: initialStatus, subscribe, history }: { sta
           {/* MPSD band */}
           <rect x="200" y="338" width="980" height="200" rx="22" className="band-private" />
           <rect x="200" y="338" width="980" height="200" rx="22" fill="url(#dotsDark)" />
-          <g transform="translate(226 362)"><LockKeyhole x={0} y={-12} size={15} color="#9fc2dc" /></g>
-          <text x="248" y="368" className="band-title light">MPSD · PRIVATE SETTLEMENT DOMAIN</text>
-          <text x="226" y="388" className="band-sub light">Run by the Whale operator · ciphertext in, hashes out</text>
+          <g transform="translate(446 362)"><LockKeyhole x={0} y={-12} size={15} color="#9fc2dc" /></g>
+          <text x="468" y="368" className="band-title light">MPSD · PRIVATE SETTLEMENT DOMAIN</text>
+          <text x="446" y="388" className="band-sub light">Run by the Whale operator · ciphertext in, hashes out</text>
           <text x="1154" y="368" textAnchor="end" className="band-sub light">only hashes leave this box</text>
           {/* Membrane */}
           <line x1="200" x2="1180" y1="277" y2="277" className="membrane" />
