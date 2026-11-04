@@ -28,7 +28,7 @@ export class Operator extends EventEmitter {
   private chain!: ChainInfo;
   private poster!: NonceSender;
   private sysNonce: number | null = null;
-  private queue: { block: bigint; triggerAt: number }[] = [];
+  private queue: { block: bigint; triggerAt: number; ev?: MonadEvents }[] = [];
   private known = new Set<string>(); // queued or done in this process
   private working = false;
   private paused = false;
@@ -183,7 +183,7 @@ export class Operator extends EventEmitter {
       if (cursor !== null && ev.blockNumber <= cursor) return; // already processed
       if (this.known.has(key)) return;
       this.known.add(key);
-      this.queue.push({ block: ev.blockNumber, triggerAt: includedAt });
+      this.queue.push({ block: ev.blockNumber, triggerAt: includedAt, ev });
       this.queue.sort((a, b) => (a.block < b.block ? -1 : 1));
       void this.work();
     }
@@ -197,7 +197,7 @@ export class Operator extends EventEmitter {
         const item = this.queue.shift()!;
         this.status = "processing";
         try {
-          await this.processMonadBlock(item.block, item.triggerAt);
+          await this.processMonadBlock(item.block, item.triggerAt, item.ev);
           this.status = "idle";
         } catch (e) {
           this.fail(e);

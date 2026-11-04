@@ -78,16 +78,23 @@ export class Relayer {
     const bytes = (ciphertext.length - 2) / 2;
     const gas = this.submitGas(bytes);
     const data = encodeFunctionData({ abi: hubAbi, functionName: "submit", args: [ciphertext, gasLimit] });
-    const slot = await this.pick(gas * 130_000_000_000n);
-    let sent: { hash: Hex; sentAt: number; maxCost: bigint };
-    try {
-      sent = await slot.sender.send({
-        to: ADDR.hub, data, gas,
-        onSigned: (h) => { receivedAtById.set(h, receivedAt); slot.inflight.set(h, { cost: gas * 130_000_000_000n, at: Date.now() }); },
-      });
-    } catch (e) {
-      throw new ApiError(502, "relay_failed", `Monad rejected the submission: ${String((e as Error).message).slice(0, 300)}`);
+    const cost = gas * 130_000_000_000n;
+    let slot = await this.pick(cost);
+    let sent: { hash: Hex; sentAt: number; maxCost: bigint } | undefined;
+    for (let attempt = 0; attempt < 2 && !sent; attempt++) {
+      try {
+        sent = await slot.sender.send({
+          to: ADDR.hub, data, gas,
+          onSigned: (h) => { receivedAtById.set(h, receivedAt); slot.inflight.set(h, { cost, at: Date.now() }); },
+        });
+        slot.balance -= cost; // conservative local balance estimate between 30 s refreshes
+      } catch (e) {
+        slot.balance = 0n; slot.balAt = Date.now(); // treat as unfunded until the next refresh; try the other relayer once
+        if (attempt === 1) throw new ApiError(502, "relay_failed", `Monad rejected the submission: ${String((e as Error).message).slice(0, 300)}`);
+        slot = await this.pick(cost).catch(() => { throw new ApiError(502, "relay_failed", `Monad rejected the submission: ${String((e as Error).message).slice(0, 300)}`); });
+      }
     }
+    if (!sent) throw new ApiError(502, "relay_failed", "submission failed");
     if (receivedAtById.size > 5000) for (const k of [...receivedAtById.keys()].slice(0, 2500)) receivedAtById.delete(k);
     emitFeed({ type: "submitted", id: sent.hash, hubTx: sent.hash, receivedAt, gasLimit: gasLimit.toString(), ciphertextBytes: bytes, relayer: slot.sender.address, sentAt: sent.sentAt });
     return { id: sent.hash, hubTx: sent.hash, receivedAt };

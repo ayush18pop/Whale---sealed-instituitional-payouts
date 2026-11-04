@@ -278,24 +278,25 @@ async function main() {
   check("FR13: claimSwap with the moved rate fails with Slippage (surfaced revert)", cf.status === 409 && cf.body.revert?.name === "Slippage", JSON.stringify(cf.body).slice(0, 200));
   // fallback: payee sends claimAsInput from their own Monad account (needs MON for gas: fund from the deployer)
   const fund = await fetchFund(pc.address);
-  const cw = monadWallet(pc.privateKey);
   const fb = wc.claimAsInput.args;
   const argsW = { payee: fb.w.payee, tokenIn: fb.w.tokenIn, tokenOut: fb.w.tokenOut, amountIn: BigInt(fb.w.amountIn), minOut: BigInt(fb.w.minOut), maxFee: BigInt(fb.w.maxFee), nonce: BigInt(fb.w.nonce) };
   const tUSDCbefore = await tok(pc.address);
   let fbOk = false, fbDetail = "", stage = "estimate";
   try {
-    const gas = await monad.estimateContractGas({ address: ADDR.hub, abi: hubAbi, functionName: "claimAsInput", args: [BigInt(fb.domainBlock), argsW, fb.salt, fb.proof], account: pc.address });
+    const cdata = encodeFunctionData({ abi: hubAbi, functionName: "claimAsInput", args: [BigInt(fb.domainBlock), argsW, fb.salt, fb.proof] });
+    const gas = await monad.estimateGas({ account: pc.address, to: ADDR.hub, data: cdata });
     stage = "send";
-    const h = await cw.writeContract({ address: ADDR.hub, abi: hubAbi, functionName: "claimAsInput", args: [BigInt(fb.domainBlock), argsW, fb.salt, fb.proof], gas: (gas * 12n) / 10n, maxFeePerGas: 125_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n });
-    const rcp = await monad.waitForTransactionReceipt({ hash: h, pollingInterval: 400 });
+    const sent = await new NonceSender(pc.privateKey).send({ to: ADDR.hub, data: cdata, gas: (gas * 12n) / 10n });
+    stage = "receipt";
+    const rcp = await monad.waitForTransactionReceipt({ hash: sent.hash, pollingInterval: 400 });
     fbOk = rcp.status === "success";
-    fbDetail = h;
+    fbDetail = sent.hash;
   } catch (e: any) { fbDetail = `${stage}: ${String(e.shortMessage ?? e.message).slice(0, 160)} | ${String(e.details ?? "").slice(0, 120)}`; }
   const tUSDCafter = await tok(pc.address);
   check("FR14: fallback claimAsInput (payee-sent) succeeds after the failed swap, paying tokenIn", fbOk && tUSDCafter - tUSDCbefore === cAmt, `${fbDetail} funded=${fund}`);
+  await api("/api/demo/mock-rate", { headers: { "x-admin-token": ADMIN }, body: { rate: "1000000000000000000" } });
   const again = await api("/api/claim", { body: { address: pc.address, nonce: wc.nonce } });
   check("after the fallback, the swap claim is rejected (AlreadyClaimed)", again.status === 409 && again.body.revert?.name === "AlreadyClaimed", JSON.stringify(again.body).slice(0, 160));
-  await api("/api/demo/mock-rate", { headers: { "x-admin-token": ADMIN }, body: { rate: "1000000000000000000" } });
 
   if (!SKIP_B) {
     section("9. reset restores the opening position; a second full run behaves identically (FR10)");
@@ -376,6 +377,7 @@ async function crashTests() {
   const lastBefore = await hubLast();
   const headBefore = await domain.getBlockNumber();
   const target = demo.payees[30];
+  const balPre = BigInt((await api(`/api/balance/${target.address}`, { as: target })).body.balance);
   const amt = 1_234_000_000n;
   const dep = new NonceSender(secrets.deployer());
   const call = (to: Address, abi: any, fn: string, args: unknown[], gas: bigint) => dep.send({ to, data: encodeFunctionData({ abi, functionName: fn, args } as any), gas });
@@ -394,7 +396,7 @@ async function crashTests() {
   const headAfter = await domain.getBlockNumber();
   const bal = await api(`/api/balance/${target.address}`, { as: target });
   check("crash 1: after restart the block was posted exactly once (Hub +1)", (await hubLast()) === lastBefore + 1n);
-  check("crash 1: deposit minted exactly once (no double mint, no extra private block)", BigInt(bal.body.balance) === amt && headAfter === headMid, `balance ${bal.body.balance}, private head ${headMid}->${headAfter}`);
+  check("crash 1: deposit minted exactly once (no double mint, no extra private block)", BigInt(bal.body.balance) - balPre === amt && headAfter === headMid, `balance ${bal.body.balance}, private head ${headMid}->${headAfter}`);
   void dtx;
   // --- crash 2: after signing, before the Monad post is sent
   await stopServer();
