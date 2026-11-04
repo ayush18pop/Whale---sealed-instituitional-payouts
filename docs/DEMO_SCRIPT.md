@@ -18,7 +18,7 @@ just watched. Every diagram step is numbered to match something already on scree
 | **0:55-1:25** | **Split screen.** Left: what the public sees on Monad (one transaction, hex bytes). Right: Payee A shows only their own amount. | "That is everything the public can see: one transaction of encrypted bytes. No names, no amounts. And this is what Payee A sees: only their own pay." | Open Observer. Payee A tab. |
 | **1:25-1:35** | Click `Try to read Payee B's balance` -> red `Denied` chip | "And if a colleague tries to look..." (pause on `Denied`) | One click. |
 | **1:35-1:50** | **Excalidraw diagram**: four boxes, three arrows (section 3). About 15 seconds. | "The Category Labs paper on Monad Private Settlement Domains came out yesterday. This is the idea." Then the three lines in section 3. | Point with the laser. |
-| **1:50-2:15** | Back to the app: latency chip + counter, then Auditor tab: `Verify receipt` -> `Verified on Monad` | "Fifty payments, one transaction, confirmed in `X` seconds. Monad blocks are about 0.3 seconds. And the auditor can prove any payment against the root Monad accepted." | Two clicks. |
+| **1:50-2:15** | Back to the app: latency chip + counter, then Auditor tab: `Verify receipt` -> `Verified on Monad` | "Fifty payments, one transaction, paid and receipted on Monad in about a second and a half. Monad blocks are about 0.3 seconds. And the auditor can prove any payment against the root Monad accepted." | Two clicks. |
 | **2:15-2:40** | *(optional, drop if running long)* Payee withdraws as `tUSDT`; `Simulated` chip visible | "Payees pick their currency. The swap venue is simulated on testnet; the path is real." | Withdraw click. |
 | **2:40-3:00** | Closing slide: one line + roadmap | See section 4 | Nothing. |
 
@@ -45,11 +45,11 @@ just watched. Every diagram step is numbered to match something already on scree
 |---|---|---|
 | Monad testnet block time about 0.3 s (measured ~315 ms) | **Measured** | 200 blocks in 63 s, 4 Nov; whole-second timestamps, so approximate. Say "about 0.3 seconds" |
 | One transaction pays 50 payees | **Measured** | contract tests; ~1.9M gas on the private chain, under Monad's 30M per-transaction limit |
-| "Confirmed in X seconds" (submit -> executed -> posted on Monad) | **Pending** | fill from the backend e2e timing report (median and p95, with sample size). Until then, say nothing |
-| Cost per result post | Measured-ish | ~0.03 MON at the gas limit; only quote if asked |
+| Submission to executed privately: about 0.75 s. Submission to receipt posted on Monad: about 1.5 s | **Measured** | backend e2e, n=10 sequential runs, median (p95 1.15 s and 2.15 s), over the WebSocket feed from one machine on the public RPC. Say "median of ten runs" if asked |
+| Cost per result post | **Measured** | ~0.016 MON (160,000 gas limit at 102 gwei); only quote if asked |
 | TPS | **Do not claim** | no supporting measurement |
 
-On the day, replace `X` with the real median from the latest rehearsal and say "median over N runs" if asked.
+On the day, re-measure in rehearsal; if the latest median differs, say the new number. Never quote a number from a different machine or network.
 
 ## 3. Excalidraw diagram (15 seconds)
 
