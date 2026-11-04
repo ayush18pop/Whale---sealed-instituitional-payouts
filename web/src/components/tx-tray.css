@@ -1,0 +1,30 @@
+.tray{position:fixed;right:24px;bottom:24px;z-index:30;width:min(400px,calc(100vw - 32px));background:#fff;border:1px solid #e3e8eb;border-radius:18px;box-shadow:0 18px 48px #172d411f,0 2px 6px #172d410d;overflow:hidden}
+.tray-head{width:100%;display:flex;align-items:center;gap:10px;padding:14px 16px;background:none;border:0;font:inherit;color:#172d41;cursor:pointer;text-align:left}
+.tray-head strong{font-size:13px;font-weight:600}
+.tray-count{margin-left:auto;font-size:11px;color:#697782}
+.tray-head svg{transition:transform .2s;color:#697782}.tray-head svg.rot{transform:rotate(180deg)}
+.tray-dot{width:8px;height:8px;border-radius:50%;background:#16a34a}
+.tray-dot.live{background:#3b82f6;animation:tray-ping 1.6s infinite}
+.tray-body{border-top:1px solid #eef2f5;max-height:52vh;overflow:auto}
+.tray-row{display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid #f1f4f6}
+.tray-icon{flex:0 0 22px;height:22px;border-radius:50%;display:grid;place-items:center;margin-top:1px}
+.tray-icon.run{background:#eff4ff;color:#1d4ed8}.tray-icon.done{background:#15803d;color:#fff}.tray-icon.fail{background:#b91c1c;color:#fff}
+.tray-main{flex:1;min-width:0}
+.tray-line{display:flex;align-items:center;gap:8px;justify-content:space-between}
+.tray-line strong{font-size:12.5px;font-weight:600;color:#172d41;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tray-links{display:flex;gap:6px;flex-shrink:0}
+.tray-links a{display:inline-flex;align-items:center;gap:2px;height:22px;padding:0 8px;border-radius:999px;background:#f1f5f8;color:#1d4ed8;font-size:11px;font-weight:550;text-decoration:none;transition:background .15s}
+.tray-links a:hover{background:#e0e9ff}
+.tray-stages{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:6px}
+.tray-stages span{font-size:10.5px;padding:2px 7px;border-radius:999px;background:#f4f6f8;color:#a1acb4;transition:all .3s}
+.tray-stages span.on{background:#172d41;color:#fff}
+.tray-stages span.next{background:#eff4ff;color:#1d4ed8;animation:tray-breathe 1.6s ease-in-out infinite}
+.tray-stages em{margin-left:auto;font-style:normal;font-size:11px;font-weight:600;color:#15803d;font-variant-numeric:tabular-nums}
+.tray-row small{display:block;margin-top:4px;font-size:11px;color:#697782}
+.tray-row small.tray-fail{color:#b91c1c}
+.tray-clear{display:block;margin:8px 16px 12px auto;background:none;border:0;font-size:11px;color:#697782;cursor:pointer}
+.spin{animation:tray-spin .9s linear infinite}
+@keyframes tray-spin{to{transform:rotate(360deg)}}
+@keyframes tray-ping{0%{box-shadow:0 0 0 0 #3b82f666}100%{box-shadow:0 0 0 8px #3b82f600}}
+@keyframes tray-breathe{50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){.spin,.tray-dot.live,.tray-stages span.next{animation:none}}

@@ -1,0 +1,59 @@
+.live{display:grid;gap:16px;margin-top:8px}
+.live-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.live-stats>div{background:#fff;border:1px solid #e3e8eb;border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:4px}
+.live-stats span{font-size:11px;color:#697782;letter-spacing:.02em}
+.live-stats strong{font-size:24px;font-weight:600;color:#172d41;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.live-stats small{font-size:11px;color:#97a4ad}
+.live-map{background:#fbfcfd;border:1px solid #e3e8eb;border-radius:20px;overflow:hidden}
+.live-map-head{display:flex;align-items:center;gap:8px;padding:12px 18px;border-bottom:1px solid #e3e8eb;font-size:12px;color:#4f6170;background:#fff}
+.live-dot{width:8px;height:8px;border-radius:50%;background:#c3ccd2}
+.live-dot.on{background:#16a34a;box-shadow:0 0 0 0 #16a34a66;animation:live-ping 1.8s infinite}
+.live-replay{margin-left:auto;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:999px;border:1px solid #d5dee5;background:#fff;color:#172d41;font:inherit;font-size:11px;cursor:pointer}
+.live-replay:hover{background:#f1f5f8}
+.live-map>svg{display:block;width:100%;height:auto;min-width:880px}
+.live-map{overflow-x:auto}
+.band-public{fill:#fffdf7;stroke:#eadfc4;stroke-width:1}
+.band-private{fill:#132a3d;stroke:#0e2132}
+.band-title{font-size:11px;font-weight:700;letter-spacing:.14em;fill:#8a6d2b}
+.band-title.light{fill:#d9e8f3}
+.band-sub{font-size:11px;fill:#a08a5a}
+.band-sub.light{fill:#7f9bb1}
+.membrane{stroke:#b7c6d1;stroke-dasharray:3 6}
+.membrane-text{font-size:11px;fill:#697782;font-style:italic}
+.edge{fill:none;stroke:#cfd9e0;stroke-width:2}
+.edge.dark{stroke:#2d4c66}
+.edge-flow{fill:none;stroke:#172d41;stroke-width:2;stroke-dasharray:4 14;opacity:.35;animation:edge-run 1.4s linear infinite}
+.edge-flow.dark{stroke:#9fc2dc;opacity:.5}
+.edge-label{font-size:10px;fill:#697782;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.edge-label.light{fill:#9fc2dc}
+.node-box{fill:#fff;stroke:#dfe6ea;filter:drop-shadow(0 2px 4px #172d4112)}
+.node.dark .node-box{fill:#1c3a52;stroke:#2f5571}
+.node-icon{fill:#172d41}
+.node.dark .node-icon{fill:#2f5571}
+.node-glyph{color:#fff}
+.node-title{font-size:13px;font-weight:600;fill:#172d41}
+.node-sub{font-size:11px;fill:#697782}
+.node.dark .node-title{fill:#fff}
+.node.dark .node-sub{fill:#9fb6c8}
+.node-hit{fill:none;stroke:#3b82f6;stroke-width:3}
+.node.dark .node-hit{stroke:#7dd3fc}
+.packet.public{fill:#172d41}.packet-glow.public{fill:#3b82f6;opacity:.45}
+.packet.private{fill:#7dd3fc}.packet-glow.private{fill:#7dd3fc;opacity:.6}
+.packet-tag.public{fill:#172d41}.packet-tag.private{fill:#0ea5e9}
+.packet-text{font-size:11px;fill:#fff;font-weight:600;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.live-ticker{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ticker-col{background:#fff;border:1px solid #e3e8eb;border-radius:16px;padding:14px 16px;min-height:200px;overflow:hidden}
+.ticker-col.dark{background:#132a3d;border-color:#0e2132;color:#d9e8f3}
+.ticker-col h4{display:flex;align-items:center;gap:8px;margin:0 0 8px;font-size:12px;font-weight:600}
+.ticker-col h4 em{margin-left:auto;font-style:normal;font-size:10px;letter-spacing:.1em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:#fffbeb;color:#92400e}
+.ticker-col.dark h4 em{background:#1c3a52;color:#7dd3fc}
+.tick{display:flex;align-items:center;gap:10px;justify-content:space-between;padding:8px 0;border-top:1px solid #eef2f5;font-size:12px;line-height:17px;min-height:42px}
+.ticker-col.dark .tick{border-color:#1f3b52}
+.tick .muted{color:#97a4ad;font-style:italic}
+.tick a{color:#1d4ed8;flex-shrink:0}
+.tick b{flex-shrink:0;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#1c3a52;color:#7dd3fc;font-variant-numeric:tabular-nums}
+.tick-empty{font-size:12px;color:#97a4ad;margin:8px 0}
+@keyframes edge-run{to{stroke-dashoffset:-36}}
+@keyframes live-ping{0%{box-shadow:0 0 0 0 #16a34a66}100%{box-shadow:0 0 0 8px #16a34a00}}
+@media (max-width:900px){.live-stats{grid-template-columns:1fr 1fr}.live-ticker{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:reduce){.edge-flow,.live-dot.on{animation:none}}

@@ -1,0 +1,26 @@
+.guide{position:relative;overflow:hidden;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:32px;padding:32px 36px;margin-bottom:24px;border-radius:24px;
+  background:linear-gradient(135deg,#ffffff 0%,#f6f9fb 60%,#eef4f8 100%);border:1px solid #e3e8eb}
+.guide-wave{position:absolute;left:0;right:0;bottom:-10px;width:100%;height:110px;pointer-events:none}
+.guide-wave path{fill:none;stroke:#172d41;stroke-width:1.2;opacity:.08;stroke-dasharray:1400;animation:guide-drift 14s ease-in-out infinite alternate}
+.guide-wave path+path{opacity:.05;animation-duration:19s}
+.guide-main,.guide-side{position:relative}
+.guide-kicker{display:inline-flex;align-items:center;gap:6px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#697782}
+.guide-kicker:before{content:'';width:6px;height:6px;border-radius:50%;background:var(--role,#172d41)}
+.guide h2{margin:10px 0 10px;font-size:30px;line-height:36px;font-weight:500;letter-spacing:-.02em;color:#172d41}
+.guide p{margin:0;max-width:520px;font-size:14px;line-height:22px;color:#4f6170}
+.guide-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.guide-actions button{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:12px;border:1px solid #d5dee5;background:#fff;color:#172d41;font:inherit;font-size:13px;font-weight:550;cursor:pointer;transition:transform .15s,box-shadow .15s,background .15s}
+.guide-actions button:hover{transform:translateY(-1px);box-shadow:0 6px 16px #172d4114}
+.guide-actions button.primary{background:#172d41;color:#fff;border-color:#172d41}
+.guide-actions button.primary svg{transition:transform .2s}.guide-actions button.primary:hover svg{transform:translateX(3px)}
+.guide-steps{list-style:none;margin:0 0 16px;padding:16px 18px;display:grid;gap:10px;background:#ffffffcc;border:1px solid #e3e8eb;border-radius:16px}
+.guide-steps li{display:flex;align-items:center;gap:10px;font-size:13px;color:#697782}
+.guide-steps li span{flex:0 0 22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:600;background:#f1f5f8;color:#97a4ad;border:1px solid #dfe6ea}
+.guide-steps li.done{color:#172d41}
+.guide-steps li.done span{background:#172d41;color:#fff;border-color:#172d41}
+.guide-sees{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:17px;color:#697782;margin-top:6px}
+.guide-sees svg{flex-shrink:0;margin-top:2px}.guide-sees b{color:#172d41;font-weight:600}
+.guide-finance{--role:#1d4ed8}.guide-approver{--role:#b45309}.guide-auditor{--role:#7c3aed}.guide-payee{--role:#15803d}
+@keyframes guide-drift{from{stroke-dashoffset:0;transform:translateX(0)}to{stroke-dashoffset:200;transform:translateX(-30px)}}
+@media (max-width:900px){.guide{grid-template-columns:1fr;padding:24px}}
+@media (prefers-reduced-motion:reduce){.guide-wave path{animation:none}}

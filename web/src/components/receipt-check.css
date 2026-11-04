@@ -1,0 +1,28 @@
+.rc{display:grid;gap:16px;margin-top:8px}
+.rc-steps{list-style:none;margin:0;padding:0;display:grid;gap:0;position:relative}
+.rc-steps li{display:flex;gap:12px;padding:10px 0;position:relative}
+.rc-steps li:not(:last-child):after{content:'';position:absolute;left:13px;top:38px;bottom:-6px;width:2px;background:#e3e8eb;transition:background .3s}
+.rc-steps li.done:not(:last-child):after{background:#172d41}
+.rc-dot{flex:0 0 28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:600;background:#f1f5f8;color:#97a4ad;border:1.5px solid #dfe6ea;transition:all .25s;z-index:1}
+.rc-steps li.done .rc-dot{background:#172d41;color:#fff;border-color:#172d41}
+.rc-steps li.run .rc-dot{background:#fff;color:#172d41;border-color:#172d41}
+.rc-steps li.fail .rc-dot{background:#b91c1c;color:#fff;border-color:#b91c1c}
+.rc-steps strong{display:block;font-size:13px;color:#172d41;font-weight:600}
+.rc-steps li.wait strong{color:#97a4ad}
+.rc-steps p{margin:2px 0 0!important;font-size:12px!important;color:#697782;line-height:17px}
+.rc-spin{animation:rc-spin .9s linear infinite}
+.rc-result{display:flex;gap:14px;align-items:flex-start;padding:16px;border-radius:14px}
+.rc-result.ok{background:#f0fdf4;border:1px solid #bbe5c8}
+.rc-result.bad{background:#fef2f2;border:1px solid #f3d6d6}
+.rc-seal{flex:0 0 44px;height:44px;border-radius:12px;display:grid;place-items:center;color:#fff}
+.rc-result.ok .rc-seal{background:#15803d}.rc-result.bad .rc-seal{background:#b91c1c}
+.rc-result strong{font-size:15px;color:#14532d}.rc-result.bad strong{color:#7f1d1d}
+.rc-result p{margin:4px 0 0!important;font-size:12px!important;line-height:17px;color:#3f5f4a}
+.rc-result.bad p{color:#7f1d1d}
+.rc-facts{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;margin:0;padding:14px 16px;border:1px solid #e3e8eb;border-radius:12px;background:#fff}
+.rc-facts div{display:flex;justify-content:space-between;gap:8px;font-size:12px}
+.rc-facts dt{color:#697782}.rc-facts dd{margin:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;color:#172d41}
+.rc-facts a{color:#1d4ed8;text-decoration:none;display:inline-flex;gap:3px;align-items:center}
+.verify-pill{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:999px;border:1px solid #cfd9e0;background:#fff;color:#172d41;font-size:12px;font-weight:550;cursor:pointer;transition:background .15s,border-color .15s}
+.verify-pill:hover{background:#f0fdf4;border-color:#86c99c;color:#15803d}
+@keyframes rc-spin{to{transform:rotate(360deg)}}
