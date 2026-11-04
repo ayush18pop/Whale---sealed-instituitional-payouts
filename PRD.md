@@ -73,8 +73,11 @@ Demo-readiness requirements:
 9. Demo controls: role switcher, Reset, latency timer, tx counter.
 10. **Payout in a chosen token (swap, now MVP):** a payee withdraws and receives `tUSDT` instead of `tUSDC`
     through claim-and-swap (section 6.1) with `minOut`, a capped flat relayer fee, and the fallback claim.
-    The swap venue on testnet is `MockSwap` (labelled **Simulated** in the UI); a real DEX adapter is a stretch
-    that needs a verified testnet pool.
+    The default venue is `MockSwap` (labelled **Simulated**). A real **Uniswap v4** venue now exists: Monad maintains a v4
+    deployment on testnet, we created our own tUSDT/tUSDC pool on it and a `UniswapV4Adapter` (tested on a fork against the
+    real PoolManager and through the real Hub and bridge). It becomes the live venue only when the bridge is switched and the
+    backend is set to match (`docs/UNISWAP.md`). Official Uniswap docs list Monad mainnet only; the testnet deployment is
+    Monad's, with mock tokens.
 
 ### Later phases (not MVP)
 - **Payout currency choice (MOVED INTO MVP, in-scope item 10):** each payee may state a preferred `tokenOut`. The manager funds one

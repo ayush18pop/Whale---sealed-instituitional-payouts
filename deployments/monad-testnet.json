@@ -30,6 +30,16 @@
       "address": "0xBAf9C6f557605737bfBb28BE2b35Fb01B0898C9f",
       "txHash": "0x8ff546448fb0583e22f007633c10a0da368208ba54fff0d0e251bb896c6bc429",
       "blockNumber": 76870854
+    },
+    "PoolSeeder": {
+      "address": "0xc612B5198170dEE64A8DCC2059CA0e8926EB3888",
+      "txHash": "0xabdcd29891f4fc1f4d66eeb749a9a371bcb12ac1ab67f999034651ce43d0b5e9",
+      "blockNumber": 76888549
+    },
+    "UniswapV4Adapter": {
+      "address": "0xAFbC813b2c5b1947B158CD4113040C47f553A912",
+      "txHash": "0x3d58e8d205c3fc0d1b33b0c50aa6b8c197b04a7989a4fea1843d5330770f7b43",
+      "blockNumber": 76888555
     }
   },
   "tokens": {
@@ -124,5 +134,31 @@
         }
       }
     }
-  ]
+  ],
+  "uniswapV4": {
+    "note": "Monad-maintained Uniswap v4 testnet deployment (NOT an official Uniswap deployment; source: monad-developers/uniswap-v4-hooks-example shared-infrastructure.json). The official Uniswap v3/v4 docs list Monad MAINNET only. The pool below is OUR OWN pool of the two mock tokens.",
+    "poolManager": "0x451D64ab3b650040d2aE1886602b97ed6eDc643d",
+    "stateView": "0xB639209539c61BaF67AC04876315786F8D0b153c",
+    "quoter": "0x869834d127b230283fe63E0d0A9bEB67216a94C7",
+    "universalRouter": "0x1b7bFCd2870329B987191910D85c22C7287f3c22",
+    "positionManager": "0x3Bb14E3D0Cd50aBe3EdACa06d06c29C78676C31A",
+    "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    "pool": {
+      "poolId": "0xed867eaf1f6aa29a7bdb966ce1db7b73b1fc54ada91d3a88d12b6b11a85d5151",
+      "currency0": "0x1F2CF3e9875e737aF77e30530E8A65aC93189289",
+      "currency1": "0xCd129C393926c15c432f9E751FCf3914d2143F10",
+      "fee": 500,
+      "tickSpacing": 10,
+      "hooks": "0x0000000000000000000000000000000000000000",
+      "initialSqrtPriceX96": "79228162514264337593543950336",
+      "range": {
+        "tickLower": -1000,
+        "tickUpper": 1000
+      },
+      "liquidity": "4000000000000",
+      "approxDepthEachToken": "195000 tokens (6 decimals)",
+      "owner": "PoolSeeder (owner = deployer; can swap to move the price)"
+    },
+    "adapterStatus": "deployed, tested on a fork; bridge still points at MockSwap until switched (see docs/UNISWAP.md)"
+  }
 }
