@@ -10,7 +10,7 @@ export const monad = createPublicClient({
 export const monadWallet = (pk: Hex) =>
   createWalletClient({ account: privateKeyToAccount(pk), chain: monadChain, transport: http(MONAD_HTTP, { retryCount: 1 }) });
 
-export const domain = createPublicClient({ chain: domainChain, transport: http(ANVIL_URL, { retryCount: 0 }) });
+export const domain = createPublicClient({ chain: domainChain, cacheTime: 0, transport: http(ANVIL_URL, { retryCount: 0 }) });
 export const domainWallet = (pk: Hex) =>
   createWalletClient({ account: privateKeyToAccount(pk), chain: domainChain, transport: http(ANVIL_URL, { retryCount: 0 }) });
 

@@ -21,5 +21,14 @@
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.1.0"
+  },
+  "scripts": {
+    "bootstrap": "tsx scripts/bootstrap.ts",
+    "anvil": "tsx scripts/anvil.ts",
+    "anvil:stop": "tsx scripts/anvil-stop.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run",
+    "e2e": "tsx scripts/e2e.ts",
+    "typecheck": "tsc --noEmit -p ."
   }
 }

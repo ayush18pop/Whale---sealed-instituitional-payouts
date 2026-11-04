@@ -85,9 +85,9 @@ export const ENC_PUBLIC_KEY = env("ENC_PUBLIC_KEY") as Hex;
 
 /** Gas constants (measured, see scripts/measure-gas.ts and docs/API.md). */
 export const GAS = {
-  submitBase: BigInt(env("GAS_SUBMIT_BASE", "60000")),
-  submitPerByte: BigInt(env("GAS_SUBMIT_PER_BYTE", "24")),
-  postResult: BigInt(env("GAS_POST_RESULT", "200000")),
+  submitBase: BigInt(env("GAS_SUBMIT_BASE", "30000")),
+  submitPerByte: BigInt(env("GAS_SUBMIT_PER_BYTE", "42")),
+  postResult: BigInt(env("GAS_POST_RESULT", "160000")),
   claim: BigInt(env("GAS_CLAIM", "250000")),
   claimSwap: BigInt(env("GAS_CLAIM_SWAP", "400000")),
 };
