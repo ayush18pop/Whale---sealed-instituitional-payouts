@@ -217,7 +217,7 @@ Correction to earlier chat: I quoted Monad block time as 400 ms. The docs state 
 | Phase | Work | Owner | Exit criterion |
 |---|---|---|---|
 | 0 | Repo, toolchain, config, interfaces | Lead | `forge test` passes in Monad mode; funded deployer on testnet; `anvil --network monad` verified. **Done up to funding.** |
-| 1 | Contracts: TestUSDC, MainBridge, Hub, DomainToken, Treasury + tests | Lead | All tests in FR6, FR7, FR9 green; deployed to testnet; addresses in `deployments.json` |
+| 1 | Contracts: TestUSDC, MainBridge, Hub, DomainToken, Treasury + tests | Lead | All tests in FR6, FR7, FR9 green; deployed to testnet; addresses in `deployments.json`. **Status: code and 67 tests done (FR4-FR7, FR9 covered at contract level; a 50-payee batch executes in ~1.9M gas). Testnet deployment waits for operator keys + encryption key (Phase 2 setup).** |
 | 2 | Operator core loop (watch, decrypt, execute, roots, post) | Backend subagent | A script submits an encrypted batch; balances and the posted root are correct |
 | 3 | RPC proxy, relayer, receipt endpoint, event feed | Backend subagent | FR5 and FR8 pass against the running service |
 | 4 | Frontend: roles, split screen, timer, Reset (mock data first) | Lead / frontend | The demo script runs by clicking, against mocks |
@@ -232,7 +232,7 @@ operator-relayed; (3) on-chain dual control -> backend-enforced.
 | ID | Decision | Recommendation |
 |---|---|---|
 | D1 | Private chain: real `anvil` vs in-memory ledger | `anvil`: runs real EVM bytecode, so the contracts are the real thing. Fall back to a ledger only if throughput fails the spike |
-| D2 | Run the domain's anvil in Monad mode (`--network monad`) or plain | Monad mode matches the paper ("an extension of the Monad client"), but Monad mode was measurably slower in `forge test` (2.8 s vs 1.1 s for one test). **Measure in the Phase 2 spike, then decide** |
+| D2 | Run the domain's anvil in Monad mode (`--network monad`) or plain | Monad mode, to match the paper ("an extension of the Monad client"). Earlier I blamed Monad mode for slow tests; the real cause was `eth-rpc-url` in `foundry.toml` making forge call the public testnet RPC (slow, and HTTP 429 failures). With the URL removed the full suite (67 tests) runs in ~0.2 s. Still **measure anvil throughput in the Phase 2 spike** |
 | D3 | Stablecoin: our `TestUSDC` vs Circle's testnet USDC | `TestUSDC` (open mint, no faucet dependency). Circle lists a Monad testnet USDC at `0x534b2f3A21130d7a60830c2Df862319e593943A3` (developers.circle.com, USDC contract addresses); more convincing but depends on a faucet |
 | D4 | Who funds the deployer and relayers | A funded testnet key via `faucet.monad.xyz`. Needs the team's wallet |
 | D5 | Role split between people / subagents | Contracts + frontend: lead. Operator + backend: Sonnet subagent (Opus only if it stalls) |

@@ -4,12 +4,13 @@ out = "out"
 libs = ["lib"]
 network = "monad"          # Monad EVM rules (Foundry >= 1.8). Default hardfork: MonadTen
 
-# Monad testnet (chain 10143). Source: docs.monad.xyz/developer-essentials/testnet
-eth-rpc-url = "https://testnet-rpc.monad.xyz"
+# Monad testnet chain id (docs.monad.xyz/developer-essentials/testnet).
+# NOTE: do NOT set eth-rpc-url here. In Monad mode forge then calls the public RPC during
+# tests (measured: slow runs and HTTP 429 rate-limit failures). Pass --rpc-url when deploying.
 chain_id = 10143
 
 [fmt]
 line_length = 100
 
 [fuzz]
-runs = 32   # Monad mode is slower per run (measured: ~1 min for 256 runs); raise with --fuzz-runs for CI
+runs = 256
