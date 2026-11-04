@@ -11,7 +11,7 @@ import { appendFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAddress, keccak256, toHex, type Address, type Hex, encodeFunctionData } from "viem";
 import { privateKeyToAccount, generatePrivateKey } from "viem/accounts";
-import { ADDR, DATA_DIR, MONAD_CHAIN_ID, OPERATOR_DIR, secrets, ANVIL_PORT } from "../src/config.js";
+import { ADDR, DATA_DIR, IS_UNI, SWAP_VENUE, MONAD_CHAIN_ID, OPERATOR_DIR, secrets, ANVIL_PORT } from "../src/config.js";
 import { domain, monad, monadWallet } from "../src/clients.js";
 import { domainTokenAbi, hubAbi, mainBridgeAbi, testUSDCAbi, treasuryAbi } from "../src/abis.js";
 import { leafHash, verifyProof } from "../src/merkle.js";
@@ -257,7 +257,12 @@ async function main() {
   section("8. withdraw to tUSDT through claimSwap; slippage; fallback claimAsInput (FR12-FR14)");
   const sAmt = A.amounts[1];
   const q = await api("/api/quote", { body: { tokenIn: ADDR.tUSDC, tokenOut: ADDR.tUSDT, amountIn: sAmt.toString(), slippageBps: 50 } });
-  check("quote returns simulated:true with suggested minOut", q.status === 200 && q.body.simulated === true, JSON.stringify(q.body).slice(0, 220));
+  console.log(`     swap venue: ${SWAP_VENUE}`);
+  if (IS_UNI) check("quote is from the real Uniswap v4 pool (simulated:false, venue uniswap-v4, pool fee 500)", q.status === 200 && q.body.simulated === false && q.body.venue === "uniswap-v4" && q.body.poolFee === 500 && BigInt(q.body.quote) > 0n, JSON.stringify(q.body).slice(0, 300));
+  else check("quote returns simulated:true with suggested minOut", q.status === 200 && q.body.simulated === true, JSON.stringify(q.body).slice(0, 220));
+  const st0 = await api("/api/status");
+  check("status swap.venue matches the venue and the bridge points at that adapter", st0.body.swap.venue === (IS_UNI ? "uniswap-v4" : "mock") && st0.body.swap.matchesBridge === true, JSON.stringify(st0.body.swap).slice(0, 300));
+  if (IS_UNI) console.log(`     pool before: price ${st0.body.swap.pool.price} tick ${st0.body.swap.pool.tick} liquidity ${st0.body.swap.pool.liquidity}`);
   const minOut = BigInt(q.body.suggestedMinOut), maxFee = BigInt(q.body.suggestedMaxFee);
   await runTx(pb, demo.token, callData(domainTokenAbi, "requestSwapWithdrawal", [sAmt, ADDR.tUSDT, minOut, maxFee]), { label: "payee B requestSwapWithdrawal" });
   const wb = (await api(`/api/withdrawals/${pb.address}`, { as: pb })).body.withdrawals[0];
@@ -266,16 +271,33 @@ async function main() {
   const usdtAfter = await tokUSDT(pb.address);
   check("FR12: claimSwap pays tUSDT >= minOut", cs.status === 200 && cs.body.kind === "claimSwap" && usdtAfter - usdtBefore >= minOut, `received ${usdtAfter - usdtBefore}, minOut ${minOut}`);
   check("FR12: relayer fee <= maxFee", cs.status === 200 && BigInt(cs.body.feePaid) <= maxFee, `fee ${cs.body?.feePaid} maxFee ${maxFee}`);
+  if (IS_UNI && cs.status === 200) {
+    const poolOut = BigInt(cs.body.received.amount) + BigInt(cs.body.feePaid);
+    console.log(`     MEASURED uniswap claim: quote ${q.body.quote}, pool out (net+fee) ${poolOut}, payee net ${usdtAfter - usdtBefore}, relayer fee ${cs.body.feePaid}, minOut ${minOut}`);
+    check("uniswap: pool output equals the quote taken just before (pool unchanged in between)", poolOut === BigInt(q.body.quote), `quote ${q.body.quote} pool ${poolOut}`);
+    check("uniswap: payee net == quote - flat fee == expectedNet", usdtAfter - usdtBefore === BigInt(q.body.expectedNet), `net ${usdtAfter - usdtBefore} expectedNet ${q.body.expectedNet}`);
+  }
   // C: slippage then fallback
   const pc = demo.payees[2];
   const cAmt = A.amounts[2];
   const qc = (await api("/api/quote", { body: { tokenIn: ADDR.tUSDC, tokenOut: ADDR.tUSDT, amountIn: cAmt.toString(), slippageBps: 50 } })).body;
   await runTx(pc, demo.token, callData(domainTokenAbi, "requestSwapWithdrawal", [cAmt, ADDR.tUSDT, BigInt(qc.suggestedMinOut), BigInt(qc.suggestedMaxFee)]), { label: "payee C requestSwapWithdrawal" });
   const wc = (await api(`/api/withdrawals/${pc.address}`, { as: pc })).body.withdrawals[0];
-  const mr = await api("/api/demo/mock-rate", { headers: { "x-admin-token": ADMIN }, body: { rate: "900000000000000000" } });
-  check("demo/mock-rate moves the MockSwap rate to 0.9", mr.status === 200, mr.body.tx);
+  if (IS_UNI) {
+    const mr0 = await api("/api/demo/mock-rate", { headers: { "x-admin-token": ADMIN }, body: { rate: "900000000000000000" } });
+    check("uniswap mode: /api/demo/mock-rate answers 409 pointing at move-price", mr0.status === 409 && /move-price/.test(mr0.body.message), JSON.stringify(mr0.body).slice(0, 200));
+    const mv = await api("/api/demo/move-price", { headers: { "x-admin-token": ADMIN }, body: { direction: "down", amount: "60000000000" } });
+    check("demo/move-price sells 60,000 tUSDC into the pool and the price moves", mv.status === 200 && mv.body.after.tick !== mv.body.before.tick, JSON.stringify(mv.body).slice(0, 400));
+    console.log(`     MEASURED price before move ${mv.body?.before?.price} (tick ${mv.body?.before?.tick}) -> after ${mv.body?.after?.price} (tick ${mv.body?.after?.tick})`);
+    const qm = await api("/api/quote", { body: { tokenIn: ADDR.tUSDC, tokenOut: ADDR.tUSDT, amountIn: cAmt.toString(), slippageBps: 50 } });
+    console.log(`     quote after move for ${cAmt}: ${qm.body.quote} (was ${qc.quote})`);
+    check("quote after the move is lower than before", qm.status === 200 && BigInt(qm.body.quote) < BigInt(qc.quote));
+  } else {
+    const mr = await api("/api/demo/mock-rate", { headers: { "x-admin-token": ADMIN }, body: { rate: "900000000000000000" } });
+    check("demo/mock-rate moves the MockSwap rate to 0.9", mr.status === 200, mr.body.tx);
+  }
   const cf = await api("/api/claim", { body: { address: pc.address, nonce: wc.nonce } });
-  check("FR13: claimSwap with the moved rate fails with Slippage (surfaced revert)", cf.status === 409 && cf.body.revert?.name === "Slippage", JSON.stringify(cf.body).slice(0, 200));
+  check("FR13: claimSwap with the moved rate/price fails with Slippage (surfaced revert)", cf.status === 409 && cf.body.revert?.name === "Slippage", JSON.stringify(cf.body).slice(0, 200));
   // fallback: payee sends claimAsInput from their own Monad account (needs MON for gas: fund from the deployer)
   const fund = await fetchFund(pc.address);
   const fb = wc.claimAsInput.args;
@@ -294,7 +316,19 @@ async function main() {
   } catch (e: any) { fbDetail = `${stage}: ${String(e.shortMessage ?? e.message).slice(0, 160)} | ${String(e.details ?? "").slice(0, 120)}`; }
   const tUSDCafter = await tok(pc.address);
   check("FR14: fallback claimAsInput (payee-sent) succeeds after the failed swap, paying tokenIn", fbOk && tUSDCafter - tUSDCbefore === cAmt, `${fbDetail} funded=${fund}`);
-  await api("/api/demo/mock-rate", { headers: { "x-admin-token": ADMIN }, body: { rate: "1000000000000000000" } });
+  if (IS_UNI) {
+    const rp = await api("/api/demo/restore-price", { headers: { "x-admin-token": ADMIN }, body: {} });
+    check("demo/restore-price brings the pool back within 1 bp of 1:1", rp.status === 200 && rp.body.withinOneBp === true, JSON.stringify(rp.body).slice(0, 400));
+    console.log(`     MEASURED price before restore ${rp.body?.before?.price} (tick ${rp.body?.before?.tick}) -> after ${rp.body?.after?.price} (tick ${rp.body?.after?.tick}), deviation ${rp.body?.deviationBps} bp, swaps ${rp.body?.txs?.length}`);
+    const qr = await api("/api/quote", { body: { tokenIn: ADDR.tUSDC, tokenOut: ADDR.tUSDT, amountIn: cAmt.toString(), slippageBps: 50 } });
+    check("quote after restore is back to the opening quote", qr.status === 200 && qr.body.quote === qc.quote, `${qr.body.quote} vs ${qc.quote}`);
+    const mp = await api("/api/demo/move-price", { headers: { "x-admin-token": ADMIN }, body: { direction: "sideways", amount: "1" } });
+    check("move-price rejects a bad direction (400)", mp.status === 400);
+  } else {
+    await api("/api/demo/mock-rate", { headers: { "x-admin-token": ADMIN }, body: { rate: "1000000000000000000" } });
+    const mp = await api("/api/demo/move-price", { headers: { "x-admin-token": ADMIN }, body: { direction: "down", amount: "1" } });
+    check("mock mode: /api/demo/move-price answers 409", mp.status === 409);
+  }
   const again = await api("/api/claim", { body: { address: pc.address, nonce: wc.nonce } });
   check("after the fallback, the swap claim is rejected (AlreadyClaimed)", again.status === 409 && again.body.revert?.name === "AlreadyClaimed", JSON.stringify(again.body).slice(0, 160));
 

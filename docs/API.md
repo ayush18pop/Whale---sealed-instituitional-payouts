@@ -85,7 +85,9 @@ bootstrap). A "reader" is an address the account granted via `DomainToken.grantR
   "contracts": { "hub": "0xBAf9..", "bridge": "0xbB22..", "mockSwap": "0x82F5..", "tUSDC": "0xCd12..", "tUSDT": "0x1F2C..",
                  "domainToken": "0x3a8a..", "treasury": "0x8F90..", "systemRelayer": "0xFb55.." },
   "tokens": { "tUSDC": { "address": "0x..", "decimals": 6 }, "tUSDT": { "address": "0x..", "decimals": 6 }, "pUSDC": { "address": "0x..", "decimals": 6 } },
-  "swap": { "adapter": "MockSwap", "simulated": true, "rates": { "tUSDC>tUSDT": "1000000000000000000", "tUSDT>tUSDC": "1000000000000000000" },
+  "swap": { "venue": "mock", "adapter": "MockSwap", "adapterAddress": "0x82F5..", "simulated": true,
+            "bridgeAdapter": "0x82F5..", "matchesBridge": true,
+            "rates": { "tUSDC>tUSDT": "1000000000000000000", "tUSDT>tUSDC": "1000000000000000000" },
             "rateScale": "1e18", "poolFeeBps": 5, "relayerFee": "50000" },
   "operator": { "status": "idle", "lastError": null, "monadWsConnected": true, "cursorMonadBlock": "76873598" },
   "relayers": ["0x350A..", "0xA46E.."],
@@ -93,8 +95,28 @@ bootstrap). A "reader" is an address the account granted via `DomainToken.grantR
 }
 ```
 `operator.status`: `starting | idle | processing | paused | error`. Cached for 1.5 s. `epoch` increments on every reset.
-`swap.relayerFee` is in output-token base units (flat). `simulated: true` means the swap venue is MockSwap: label it
-**Simulated** in the UI.
+`swap.relayerFee` is in output-token base units (flat).
+
+**Swap venue (`swap.venue`).** The backend runs in one of two modes (`SWAP_VENUE` env, must match the venue the MainBridge
+is set to; `swap.matchesBridge` reports whether `MainBridge.swapAdapter()` equals the configured adapter):
+
+| `swap.venue` | `simulated` | Meaning | UI label |
+|---|---|---|---|
+| `"mock"` | `true` | MockSwap, a simulated venue with a settable rate (`rates`, `rateScale` present) | **Simulated** |
+| `"uniswap-v4"` | `false` | a real Uniswap v4 pool (our own tUSDT/tUSDC pool of mock tokens on Monad's testnet v4 deployment) | **Uniswap v4 (testnet pool, mock tokens)** |
+
+**Frontend note: when `venue` is `"uniswap-v4"` the UI must NOT say "Simulated".** Suggested label: "Uniswap v4 (testnet pool,
+mock tokens)". Do not call it a mainnet or official Uniswap market. Branch on `swap.venue`/`simulated`, never on the adapter name.
+
+In uniswap mode `swap` has no `rates`/`rateScale` and instead:
+```json
+"swap": { "venue": "uniswap-v4", "adapter": "UniswapV4Adapter", "adapterAddress": "0xAFbC..", "simulated": false,
+          "bridgeAdapter": "0xAFbC..", "matchesBridge": true, "poolFeeBps": 5, "relayerFee": "50000",
+          "pool": { "poolId": "0xed86..", "currency0": "0x1F2C.. (tUSDT)", "currency1": "0xCd12.. (tUSDC)", "fee": 500, "tickSpacing": 10,
+                    "tick": 0, "sqrtPriceX96": "79228162514264337593543950336", "price": "1.000000000000",
+                    "priceNote": "tUSDC per tUSDT (token1/token0)", "liquidity": "4000000000000" } }
+```
+`pool.fee` is in hundredths of a basis point (500 = 0.05% = `poolFeeBps` 5). `pool.price` is a decimal string (12 fraction digits).
 
 ### `GET /api/crypto` (public)
 
@@ -243,7 +265,9 @@ after one `eth_estimateGas` that decodes any revert. Response:
   "feePaid": "50000", "relayer": "0x350A..", "monadBlock": "76876650", "payee": "0x..", "nonce": "0", "domainBlock": "7" }
 ```
 Errors: 404 `not_found`; 409 `not_posted`; 409 `claim_in_progress`; 409 `claim_reverted` with
-`"revert": { "name": "Slippage" | "AlreadyClaimed" | "InvalidProof" | "FeeAboveMax" | "OutputBelowMin" | ..., "args": [..] }`.
+`"revert": { "name": "Slippage" | "PartialFill" | "WrongPair" | "NotBridge" | "AlreadyClaimed" | "InvalidProof" | "FeeAboveMax" | "OutputBelowMin" | ..., "args": [..] }`
+(errors of Hub, MainBridge, MockSwap and the UniswapV4Adapter are decoded; `UnknownError` carries the raw data otherwise).
+`Slippage` (price moved below `minOut`) and `PartialFill` (the pool cannot absorb the whole amount) both mean: use `claimAsInput`.
 Claims are never retried blindly. After `Slippage`, the payee uses `claimAsInput`.
 
 ### `POST /api/quote` (public)
@@ -251,13 +275,20 @@ Claims are never retried blindly. After `Slippage`, the payee uses `claimAsInput
 Request `{ "tokenIn", "tokenOut", "amountIn": "1000000000", "slippageBps": 50 }` ->
 
 ```json
-{ "tokenIn": "0x..", "tokenOut": "0x..", "amountIn": "1000000000", "quote": "999500000", "poolFeeBps": 5,
-  "relayerFee": "50000", "expectedNet": "999450000", "slippageBps": 50, "suggestedMinOut": "994452750",
-  "suggestedMaxFee": "50000", "simulated": true, "venue": "MockSwap" }
+{ "tokenIn": "0x..", "tokenOut": "0x..", "amountIn": "100000000", "quote": "99947502", "poolFeeBps": 5, "poolFee": 500,
+  "relayerFee": "50000", "expectedNet": "99897502", "slippageBps": 50, "suggestedMinOut": "99398015",
+  "suggestedMaxFee": "50000", "simulated": false, "venue": "uniswap-v4" }
 ```
-`quote` = `MockSwap.quote` (after the 5 bps pool fee). `expectedNet` = quote - flat relayer fee. `suggestedMinOut` =
-`expectedNet x (1 - slippage)`: this is the value for `requestSwapWithdrawal(amount, tokenOut, minOut, maxFee)`
-(the contract requires `minOut` to be received AFTER the fee). Only tUSDC and tUSDT are accepted.
+Fields are unchanged from before, with these differences: `venue` is now `"uniswap-v4"` or `"mock"` (it used to be the string
+`"MockSwap"`); `simulated` is `false` for uniswap; `poolFee` (pips, uniswap only) is added.
+
+- `quote` = the gross output of the venue. Uniswap mode: `V4Quoter.quoteExactInputSingle` by `eth_call` against the real
+  pool at the current price (measured: 100 tUSDC in -> 99,947,502 tUSDT out at 1:1). Mock mode: `MockSwap.quote` (after the 5 bps fee).
+- `expectedNet` = `quote` minus the flat relayer fee. This is what the payee receives. `suggestedMinOut` = `expectedNet x (1 - slippage)`:
+  the value for `requestSwapWithdrawal(amount, tokenOut, minOut, maxFee)`. The contract requires `minOut` to be received AFTER the
+  fee (the bridge asks the venue for at least `minOut + fee`), so `minOut` is net of the fee.
+- Only tUSDC and tUSDT are accepted. Uniswap mode adds `409 quote_failed` (the pool cannot fill that size: it holds roughly
+  195,000 of each token within +-10% of 1:1).
 
 ### Demo endpoints
 
@@ -266,14 +297,24 @@ Request `{ "tokenIn", "tokenOut", "amountIn": "1000000000", "slippageBps": 50 }`
   `operator/data/demo-accounts.json` (git-ignored) and hold no value.
 - `POST /api/demo/reset` (admin): header `x-admin-token: <DEMO_ADMIN_TOKEN>` (or `Authorization: Bearer ..`). Pauses the
   operator, `evm_revert`s the private chain to the opening snapshot (re-snapshotting), bumps `epoch`, restores the mock
-  rate to 1.0 and tops up the MainBridge escrow with `TestUSDC.mint` if earlier claims drained it below the opening supply.
+  rate to 1.0 (uniswap mode: restores the pool price to 1:1, see `restore-price`) and tops up the MainBridge escrow with `TestUSDC.mint` if earlier claims drained it below the opening supply.
   Hub counters on Monad are never touched. Returns `{ epoch, snapshotId, actions, status }`. 401 bad token, 503 if
   `DEMO_ADMIN_TOKEN` is unset, 409 `snapshot_lost` if anvil was restarted (run `pnpm bootstrap -- --force`).
   After a reset, receipts, payments and withdrawals of earlier epochs are no longer served, and every account's private
   nonce is back at its opening value (refetch `/api/nonce`).
 - `POST /api/demo/mock-rate` (admin): `{ "rate": "900000000000000000", "tokenIn"?, "tokenOut"? }` (default
   tUSDC->tUSDT, scaled 1e18). Sends `MockSwap.setRate` as the deployer and waits for it; returns `{ tokenIn, tokenOut,
-  rate, tx, monadBlock }`.
+  rate, tx, monadBlock }`. In uniswap mode: **409 `wrong_venue`** (message points to `move-price`).
+- `POST /api/demo/move-price` (admin, **uniswap mode only**, 409 `wrong_venue` in mock mode): `{ "direction": "down" | "up",
+  "amount": "60000000000" }` (base units, 1..150,000 tokens). Calls `PoolSeeder.swapExactIn` as the deployer. `"down"` sells
+  tUSDC into the pool, which makes the tUSDC->tUSDT rate (the claim-and-swap direction) worse; `"up"` sells tUSDT (better).
+  Measured: a 60,000 tUSDC move changed the price from 1.000000000000 (tick 0) to 1.030209775056 (tick 297) and a 100 tUSDC swap
+  from 99.947502 to 97.016687. Returns `{ direction, sold, amountIn, tx, monadBlock, mintTx, before, after }` where
+  `before`/`after` are `{ sqrtPriceX96, tick, price, liquidity }` read back from the pool (`mintTx` is set when the seeder had to be
+  topped up). An in-flight claim whose `minOut` was set at the old price then fails with `Slippage`; use `claimAsInput`.
+- `POST /api/demo/restore-price` (admin, uniswap mode only): sizes the opposite swap from the pool's `sqrtPriceX96` and liquidity,
+  grossed up for the 0.05% fee, executes it, reads the price back and, if not within 1 bp of 1:1, repeats once. Returns
+  `{ skipped, txs[], before, after, deviationBps, withinOneBp }`.
 
 ## 4. Errors
 
@@ -283,7 +324,7 @@ Request `{ "tokenIn", "tokenOut", "amountIn": "1000000000", "slippageBps": 50 }`
 | 401 | `unauthorized` | missing/stale/invalid read signature or admin token |
 | 403 | `denied` | the contract refused this read for the caller |
 | 404 | `not_found` | unknown route, batch, payment, withdrawal |
-| 409 | `claim_reverted` (+`revert`), `not_posted`, `claim_in_progress`, `no_rate`, `snapshot_lost`, `not_bootstrapped` | state conflict |
+| 409 | `claim_reverted` (+`revert`), `not_posted`, `claim_in_progress`, `no_rate`, `quote_failed`, `wrong_venue`, `move_failed`, `snapshot_lost`, `not_bootstrapped` | state conflict |
 | 413 | `bad_request` | body over 400 KB |
 | 502/504 | `relay_failed`, `tx_reverted`, `claim_timeout`, `timeout` | Monad side failed |
 | 503 | `relayer_busy`, `admin_disabled` | |
@@ -378,3 +419,20 @@ block gas limit.
 (`eth_estimateGas` for it: 137,856) is about 0.016 MON at the observed 102 gwei gas price (PRD 7.1's ~0.03 MON came from a looser limit);
 one full e2e run spent 0.356 MON on operator 1 (22 posts) and about 0.2 MON on the relayers.
 
+
+## 9. Running behind an ngrok tunnel (free tier)
+
+The API can be exposed with `ngrok http 8787`. The public URL changes on every ngrok restart, so it is **not** committed;
+read it from `http://127.0.0.1:4040/api/tunnels` on the machine running the tunnel.
+
+- **Every `fetch` must send `ngrok-skip-browser-warning: 1`.** Without it, ngrok's free tier returns its HTML warning page
+  (HTTP 200, `text/html`) to browser requests instead of JSON. The API's CORS configuration allows this header.
+- **WebSocket (`wss://<tunnel>/api/events`)** works through the tunnel without any header. A browser WebSocket cannot set
+  custom headers, so none is needed.
+- **CORS** allows only the origins in `CORS_ORIGIN` (comma separated; default `http://localhost:3000`). A frontend served
+  from another origin must be added there and the API restarted.
+- **Demo mode exposes keys.** With `DEMO_MODE=1`, `GET /api/demo/accounts` returns the demo accounts' private keys (testnet
+  only, mock tokens) to anyone who has the tunnel URL. Share the URL only with the team, and stop the tunnel when not
+  demoing. `DEMO_MODE=0` disables the endpoint.
+- Verified 4 Nov 2026 through a live tunnel: JSON from `/api/status`, CORS preflight with the skip header (204), 401 on
+  an unauthenticated private read, and a working WebSocket (`hello` message).

@@ -4,17 +4,18 @@ import { bodyLimit } from "hono/body-limit";
 import { serve } from "@hono/node-server";
 import { WebSocketServer, type WebSocket } from "ws";
 import { getAddress, isAddress, isHex, type Address, type Hex } from "viem";
-import { ADDR, API_HOST, API_PORT, CORS_ORIGIN, DEMO_ADMIN_TOKEN, DEMO_MODE, DOMAIN_CHAIN_ID, ENC_PUBLIC_KEY, EXPLORER, MONAD_CHAIN_ID, SWAP_INFO, SYSTEM_RELAYER_ADDR } from "./config.js";
+import { ADDR, API_HOST, API_PORT, CORS_ORIGIN, DEMO_ADMIN_TOKEN, DEMO_MODE, DOMAIN_CHAIN_ID, ENC_PUBLIC_KEY, EXPLORER, IS_UNI, MONAD_CHAIN_ID, SWAP_INFO, UNI, SYSTEM_RELAYER_ADDR } from "./config.js";
 import { domain, monad } from "./clients.js";
 import { domainTokenAbi, hubAbi, mainBridgeAbi, mockSwapAbi, treasuryAbi } from "./abis.js";
 import { AuthError, verifyAuth, AUTH_WINDOW_S } from "./auth.js";
 import { CRYPTO_SPEC } from "./crypto.js";
 import { bus, type FeedEvent } from "./events.js";
-import { ApiError, Relayer } from "./relayer.js";
+import { ApiError, Relayer, decodeRevert } from "./relayer.js";
 import { Operator } from "./operator.js";
 import { store, type BlockRecord } from "./store.js";
 import { buildTree, verifyProof, type MsgLeaf } from "./merkle.js";
-import { resetDemo, setMockRate } from "./demo.js";
+import { movePrice, resetDemo, restorePrice, setMockRate } from "./demo.js";
+import { bridgeAdapter, priceString, quoteNumbers, quoteUniswap, readPool } from "./uniswap.js";
 import { fetchRange } from "./monadWatch.js";
 
 const STATUS = ["None", "Pending", "Executed", "Cancelled"] as const;
@@ -44,7 +45,7 @@ export async function startApi(op: Operator, relayer: Relayer) {
   const feedRing: FeedEvent[] = [];
   bus.on("feed", (e: FeedEvent) => { feedRing.push(e); if (feedRing.length > 100) feedRing.shift(); });
 
-  app.use("*", cors({ origin: CORS_ORIGIN.split(","), allowHeaders: ["content-type", "x-address", "x-timestamp", "x-signature", "authorization", "x-admin-token"], allowMethods: ["GET", "POST", "OPTIONS"], maxAge: 600 }));
+  app.use("*", cors({ origin: CORS_ORIGIN.split(","), allowHeaders: ["content-type", "x-address", "x-timestamp", "x-signature", "authorization", "x-admin-token", "ngrok-skip-browser-warning"], allowMethods: ["GET", "POST", "OPTIONS"], maxAge: 600 }));
   app.onError((e, c) => {
     if (e instanceof ApiError) return c.json({ error: e.code, message: e.message, ...(e.extra ?? {}) }, e.status as any);
     if (e instanceof AuthError) return c.json({ error: "unauthorized", message: e.message }, 401);
@@ -69,12 +70,16 @@ export async function startApi(op: Operator, relayer: Relayer) {
   app.get("/api/status", async (c) => {
     if (statusCache && Date.now() - statusCache.at < 1500) return c.json(statusCache.v);
     const ch = chain();
-    const [lastD, lastM, relFee, rateIO, rateOI, headP, monadHead] = await Promise.all([
+    const [lastD, lastM, relFee, mockRates, pool, bridgeAdp, headP, monadHead] = await Promise.all([
       monad.readContract({ address: ADDR.hub, abi: hubAbi, functionName: "lastDomainBlock" }),
       monad.readContract({ address: ADDR.hub, abi: hubAbi, functionName: "lastMonadBlock" }),
       monad.readContract({ address: ADDR.bridge, abi: mainBridgeAbi, functionName: "relayerFee" }),
-      monad.readContract({ address: ADDR.swap, abi: mockSwapAbi, functionName: "rate", args: [ADDR.tUSDC, ADDR.tUSDT] }),
-      monad.readContract({ address: ADDR.swap, abi: mockSwapAbi, functionName: "rate", args: [ADDR.tUSDT, ADDR.tUSDC] }),
+      IS_UNI ? Promise.resolve(null) : Promise.all([
+        monad.readContract({ address: ADDR.swap, abi: mockSwapAbi, functionName: "rate", args: [ADDR.tUSDC, ADDR.tUSDT] }),
+        monad.readContract({ address: ADDR.swap, abi: mockSwapAbi, functionName: "rate", args: [ADDR.tUSDT, ADDR.tUSDC] }),
+      ]),
+      IS_UNI ? readPool() : Promise.resolve(null),
+      bridgeAdapter().catch(() => null),
       domain.getBlockNumber(),
       op.watcher.head ? Promise.resolve(op.watcher.head) : monad.getBlockNumber(),
     ]);
@@ -85,7 +90,19 @@ export async function startApi(op: Operator, relayer: Relayer) {
       lastResult: op.lastResult ?? (lastD > 0n ? (() => { const r = store.block(lastD); return r ? { domainBlock: r.domainBlock, monadBlock: r.monadBlock, stateRoot: r.stateRoot, msgRoot: r.msgRoot, postTx: r.postTx } : null; })() : null),
       contracts: { hub: ADDR.hub, bridge: ADDR.bridge, mockSwap: ADDR.swap, tUSDC: ADDR.tUSDC, tUSDT: ADDR.tUSDT, domainToken: ch.token, treasury: ch.treasury, systemRelayer: SYSTEM_RELAYER_ADDR },
       tokens: { tUSDC: { address: ADDR.tUSDC, decimals: 6 }, tUSDT: { address: ADDR.tUSDT, decimals: 6 }, pUSDC: { address: ch.token, decimals: 6 } },
-      swap: { adapter: SWAP_INFO.adapter, simulated: true, rates: { "tUSDC>tUSDT": rateIO, "tUSDT>tUSDC": rateOI }, rateScale: "1e18", poolFeeBps: SWAP_INFO.poolFeeBps, relayerFee: relFee },
+      swap: IS_UNI
+        ? {
+            venue: SWAP_INFO.venue, adapter: SWAP_INFO.adapter, adapterAddress: SWAP_INFO.adapterAddress, simulated: false,
+            bridgeAdapter: bridgeAdp, matchesBridge: bridgeAdp?.toLowerCase() === SWAP_INFO.adapterAddress.toLowerCase(),
+            poolFeeBps: SWAP_INFO.poolFeeBps, relayerFee: relFee,
+            pool: { poolId: UNI.poolId, currency0: UNI.key.currency0, currency1: UNI.key.currency1, fee: UNI.key.fee, tickSpacing: UNI.key.tickSpacing,
+                    tick: pool!.tick, sqrtPriceX96: pool!.sqrtPriceX96, price: priceString(pool!.sqrtPriceX96), priceNote: "tUSDC per tUSDT (token1/token0)", liquidity: pool!.liquidity },
+          }
+        : {
+            venue: SWAP_INFO.venue, adapter: SWAP_INFO.adapter, adapterAddress: SWAP_INFO.adapterAddress, simulated: true,
+            bridgeAdapter: bridgeAdp, matchesBridge: bridgeAdp?.toLowerCase() === SWAP_INFO.adapterAddress.toLowerCase(),
+            rates: { "tUSDC>tUSDT": mockRates![0], "tUSDT>tUSDC": mockRates![1] }, rateScale: "1e18", poolFeeBps: SWAP_INFO.poolFeeBps, relayerFee: relFee,
+          },
       operator: { status: op.status, lastError: op.lastError, monadWsConnected: op.watcher.connected, cursorMonadBlock: store.state().cursorMonadBlock },
       relayers: relayer.addresses,
       epoch: store.state().epoch,
@@ -154,12 +171,21 @@ export async function startApi(op: Operator, relayer: Relayer) {
     const allowed = new Set([ADDR.tUSDC, ADDR.tUSDT]);
     if (!allowed.has(tokenIn) || !allowed.has(tokenOut)) throw new ApiError(400, "unsupported_token", "only tUSDC and tUSDT are supported");
     let out: bigint;
-    try { out = await monad.readContract({ address: ADDR.swap, abi: mockSwapAbi, functionName: "quote", args: [tokenIn, tokenOut, amountIn] }); }
-    catch { throw new ApiError(409, "no_rate", "MockSwap has no rate for this pair"); }
+    if (IS_UNI) {
+      if (amountIn <= 0n || amountIn >= 2n ** 128n) throw new ApiError(400, "bad_request", "amountIn must be 1..2^128-1");
+      try { out = (await quoteUniswap(tokenIn, tokenOut, amountIn)).amountOut; }
+      catch (e) { const d = decodeRevert(e); throw new ApiError(409, "quote_failed", `Uniswap v4 quote failed${d ? `: ${d.name}` : ""}; the pool may not have the liquidity for this size`); }
+    } else {
+      try { out = await monad.readContract({ address: ADDR.swap, abi: mockSwapAbi, functionName: "quote", args: [tokenIn, tokenOut, amountIn] }); }
+      catch { throw new ApiError(409, "no_rate", "MockSwap has no rate for this pair"); }
+    }
     const fee = await monad.readContract({ address: ADDR.bridge, abi: mainBridgeAbi, functionName: "relayerFee" });
-    const net = out > fee ? out - fee : 0n;
-    const suggestedMinOut = (net * BigInt(10_000 - slip)) / 10_000n;
-    return c.json(str({ tokenIn, tokenOut, amountIn, quote: out, poolFeeBps: SWAP_INFO.poolFeeBps, relayerFee: fee, expectedNet: net, slippageBps: slip, suggestedMinOut, suggestedMaxFee: fee, simulated: true, venue: "MockSwap" }));
+    const { expectedNet: net, suggestedMinOut } = quoteNumbers(out, fee, slip);
+    return c.json(str({
+      tokenIn, tokenOut, amountIn, quote: out, poolFeeBps: SWAP_INFO.poolFeeBps, ...(IS_UNI ? { poolFee: UNI.key.fee } : {}),
+      relayerFee: fee, expectedNet: net, slippageBps: slip, suggestedMinOut, suggestedMaxFee: fee,
+      simulated: SWAP_INFO.simulated, venue: SWAP_INFO.venue,
+    }));
   });
 
   // ---------------------------------------------------------------- authenticated reads
@@ -357,6 +383,7 @@ export async function startApi(op: Operator, relayer: Relayer) {
   });
   app.post("/api/demo/mock-rate", async (c) => {
     admin(c);
+    if (IS_UNI) throw new ApiError(409, "wrong_venue", "SWAP_VENUE=uniswap: there is no mock rate. Use POST /api/demo/move-price and POST /api/demo/restore-price");
     const b = await c.req.json().catch(() => null);
     let rate: bigint;
     try { rate = BigInt(b.rate); } catch { throw new ApiError(400, "bad_request", "rate must be an integer string scaled by 1e18 (1e18 = 1:1)"); }
@@ -365,6 +392,25 @@ export async function startApi(op: Operator, relayer: Relayer) {
     const r = await setMockRate(tokenIn, tokenOut, rate);
     statusCache = null;
     return c.json({ tokenIn, tokenOut, rate: rate.toString(), ...r });
+  });
+
+  app.post("/api/demo/move-price", async (c) => {
+    admin(c);
+    if (!IS_UNI) throw new ApiError(409, "wrong_venue", "SWAP_VENUE=mock: use POST /api/demo/mock-rate");
+    const b = await c.req.json().catch(() => null);
+    if (!b || (b.direction !== "down" && b.direction !== "up")) throw new ApiError(400, "bad_request", 'direction must be "down" or "up"');
+    let amt: bigint;
+    try { amt = BigInt(b.amount); } catch { throw new ApiError(400, "bad_request", "amount must be a base-unit integer (string), 6 decimals"); }
+    const r = await movePrice(b.direction, amt);
+    statusCache = null;
+    return c.json(str(r));
+  });
+  app.post("/api/demo/restore-price", async (c) => {
+    admin(c);
+    if (!IS_UNI) throw new ApiError(409, "wrong_venue", "SWAP_VENUE=mock: use POST /api/demo/mock-rate");
+    const r = await restorePrice();
+    statusCache = null;
+    return c.json(str(r));
   });
 
   // ---------------------------------------------------------------- server + WebSocket feed

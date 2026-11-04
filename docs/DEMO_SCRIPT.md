@@ -17,8 +17,8 @@ just watched. Every diagram step is numbered to match something already on scree
 | **0:40-0:55** | Switch role to Approver, click `Approve`; switch to a second approver, click `Approve`. Row flips to `Executed`. | "Two approvers required. Finance can't approve its own batch." | Two approvals via the role switcher. |
 | **0:55-1:25** | **Split screen.** Left: what the public sees on Monad (one transaction, hex bytes). Right: Payee A shows only their own amount. | "That is everything the public can see: one transaction of encrypted bytes. No names, no amounts. And this is what Payee A sees: only their own pay." | Open Observer. Payee A tab. |
 | **1:25-1:35** | Click `Try to read Payee B's balance` -> red `Denied` chip | "And if a colleague tries to look..." (pause on `Denied`) | One click. |
-| **1:35-1:50** | **Excalidraw diagram**: four boxes, three arrows (section 3). About 15 seconds. | "The Category Labs paper on Monad Private Settlement Domains came out yesterday. This is the idea." Then the three lines in section 3. | Point with the laser. |
-| **1:50-2:15** | Back to the app: latency chip + counter, then Auditor tab: `Verify receipt` -> `Verified on Monad` | "Fifty payments, one transaction, paid and receipted on Monad in about a second and a half. Monad blocks are about 0.3 seconds. And the auditor can prove any payment against the root Monad accepted." | Two clicks. |
+| **1:35-1:55** | **Excalidraw diagram**: browser, relay, tx builder, Monad, operator (section 3). About 20 seconds. | "The Category Labs paper on Monad Private Settlement Domains came out yesterday. This is the idea." Then the three lines in section 3. | Point with the laser. |
+| **1:55-2:15** | Back to the app: latency chip + counter, then Auditor tab: `Verify receipt` -> `Verified on Monad` | "Fifty payments, one transaction, paid and receipted on Monad in about a second and a half. Monad blocks are about 0.3 seconds. And the auditor can prove any payment against the root Monad accepted." | Two clicks. |
 | **2:15-2:40** | *(optional, drop if running long)* Payee withdraws as `tUSDT`; `Simulated` chip visible | "Payees pick their currency. The swap venue is simulated on testnet; the path is real." | Withdraw click. |
 | **2:40-3:00** | Closing slide: one line + roadmap | See section 4 | Nothing. |
 
@@ -51,24 +51,28 @@ just watched. Every diagram step is numbered to match something already on scree
 
 On the day, re-measure in rehearsal; if the latest median differs, say the new number. Never quote a number from a different machine or network.
 
-## 3. Excalidraw diagram (15 seconds)
+## 3. Excalidraw diagram (about 20 seconds)
 
-File: **`docs/whale-architecture.excalidraw`** (open at excalidraw.com, or drag it into the app). Four boxes, three
-numbered arrows, about 60 words in total. It is meant to be understood by someone who knows Ethereum basics and
-nothing else.
+File: **`docs/whale-architecture.excalidraw`** (open at excalidraw.com, or drag it into the app). Handwriting font, five
+boxes, four numbered arrows. Simple enough to follow cold, technical enough for a developer: it shows where encryption
+happens, who signs what, and what Monad actually sees.
 
-**How to present it:** show the whole picture and point with Excalidraw's **laser pointer** (press `K`) from arrow 1
-to arrow 3. About 4 seconds per line:
+**How to present it:** point with Excalidraw's **laser pointer** (press `K`) from arrow 1 to arrow 4, about 5 seconds each:
 
 | Arrow | Say | Matches in the live demo |
 |---|---|---|
-| 1 | "The company locks the payout in a box." | The `Propose payout` click |
-| 2 | "Monad passes the box along. It can't open it." | The left pane of the split screen: bytes only |
-| 3 | "Our private room opens it and pays everyone. Each person sees only their own pay." | Payee A's view and `Denied` |
+| 1 | "The browser signs the payout and encrypts it. Only ciphertext leaves." | The `Propose payout` click |
+| 2 | "Our trusted relay queues the encrypted transactions in the order they arrive." | The left pane of the split screen |
+| 3 | "The tx builder wraps each one in a Hub call, signs with our backend key, and submits it on Monad. Monad sees only bytes." | The explorer showing one transaction of hex |
+| 4 | "Our operator decrypts it, runs it privately, and posts a receipt back." | `Verified on Monad` and each person's own view |
 
-Skip the Auditor box unless asked; point at it only if time allows ("and an auditor can see everything, if allowed").
-Colours: **blue = public (Monad)**, **grey dashed = private**, **green = employees**. The footer states that the
-private room is run by us in the demo.
+**Accuracy notes (so you do not over-claim on stage):** the relay **queues in arrival order**; it does not merge several
+encrypted transactions into one Monad transaction (each is its own `Hub.submit`). The payroll batch of 50 payees is a
+single *inner* transaction. The browser signs the payout; the backend signs the outer Monad transaction and pays the gas.
+The operator is run by us in the demo, which the footer says.
+
+Colours: **blue = public (Monad)**, **grey dashed = private**. The `0x9f3a...c1d2` entries in the relay box are
+illustrative placeholders, not real hashes.
 
 ## 4. Closing (10 seconds)
 
