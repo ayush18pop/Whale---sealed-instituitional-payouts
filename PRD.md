@@ -1,4 +1,7 @@
-# PRD: Sealed Payouts
+# PRD: Whale
+
+> **Whale** - Institutional funds privacy at ease.
+> Frontend spec: [FRONTEND_PRD.md](FRONTEND_PRD.md). The earlier working title was "Sealed Payouts".
 
 Private batch payouts for organizations, settled on Monad. Built as a first working demonstration of the
 pattern in the Category Labs "Monad Private Settlement Domains" (MPSD) white paper (3 Nov 2026).
@@ -68,9 +71,13 @@ Demo-readiness requirements:
 7. Withdrawal back to Monad with a Merkle inclusion proof and replay protection.
 8. Public-view panel showing exactly what Monad shows.
 9. Demo controls: role switcher, Reset, latency timer, tx counter.
+10. **Payout in a chosen token (swap, now MVP):** a payee withdraws and receives `tUSDT` instead of `tUSDC`
+    through claim-and-swap (section 6.1) with `minOut`, a capped flat relayer fee, and the fallback claim.
+    The swap venue on testnet is `MockSwap` (labelled **Simulated** in the UI); a real DEX adapter is a stretch
+    that needs a verified testnet pool.
 
 ### Later phases (not MVP)
-- **Payout currency choice (Phase 7):** each payee may state a preferred `tokenOut`. The manager funds one
+- **Payout currency choice (MOVED INTO MVP, in-scope item 10):** each payee may state a preferred `tokenOut`. The manager funds one
   token; there is no hub-wide default currency. The swap happens at withdrawal through a `SwapAdapter`
   (section 6.1). Demo uses `MockSwap`; a real Uniswap adapter only after testnet availability is confirmed.
 - **Recurring payouts (Phase 7, decision D6):** a backend scheduler auto-**proposes** each month's batch.
@@ -120,7 +127,7 @@ gas sponsorship via a different payer (5.2.1).
 - Block cadence: one domain block per Monad block that has domain transactions (matches 5.2.2). Timestamps and
   randomness are not specified by the paper; we use block numbers and need no randomness.
 
-### 6.1 What is public, who signs what, and the claim-and-swap flow (Phase 7)
+### 6.1 What is public, who signs what, and the claim-and-swap flow (MVP)
 
 **The Hub is public.** It is a contract on Monad: a mailbox and notary. It cannot decrypt anything. Only the
 operator holds the decryption key. Balances live on the private EVM, not in the Hub. Encrypting a transaction
@@ -213,10 +220,10 @@ Only the block time is a defensible speed figure today.
 | FR9 | Withdrawal pays out on Monad exactly once | A second claim of the same leaf reverts |
 | FR10 | Reset restores the opening state | After Reset, a fresh run behaves identically |
 | FR11 | The timer shows measured submit-to-confirmed latency | Value is computed from real timestamps, not hard-coded |
-| FR12 | (Phase 7) Withdrawal with a swap pays the payee `tokenOut` | Payee receives >= `minOut`; relayer fee <= `maxFee` |
-| FR13 | (Phase 7) A swap below `minOut` reverts | Move the mock price; claim reverts |
-| FR14 | (Phase 7) Fallback claim in the original token works after a failed swap | Claim succeeds with `tokenIn` |
-| FR15 | (Phase 7) `SwapAdapter` is callable only by `MainBridge` | Direct call from any other address reverts |
+| FR12 | (MVP) Withdrawal with a swap pays the payee `tokenOut` | Payee receives >= `minOut`; relayer fee <= `maxFee` |
+| FR13 | (MVP) A swap below `minOut` reverts | Move the mock price; claim reverts |
+| FR14 | (MVP) Fallback claim in the original token works after a failed swap | Claim succeeds with `tokenIn` |
+| FR15 | (MVP) `SwapAdapter` is callable only by `MainBridge` | Direct call from any other address reverts |
 
 ## 9. Non-functional requirements
 
