@@ -19,6 +19,7 @@ import {IMainBridge} from "./interfaces/IMainBridge.sol";
 contract Hub {
     /// @dev Leaf kind tags make future message types unambiguous (Phase 7 adds swap terms).
     uint8 public constant KIND_WITHDRAWAL = 1;
+    uint8 public constant KIND_SWAP_WITHDRAWAL = 2;
     uint256 public constant MAX_CIPHERTEXT_BYTES = 65_536;
     uint256 public constant MAX_DOMAIN_GAS = 30_000_000; // Monad per-transaction gas limit
 
@@ -56,6 +57,22 @@ contract Hub {
         uint256 nonce
     );
 
+    event ClaimedSwap(
+        uint64 indexed domainBlock,
+        address indexed payee,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 nonce
+    );
+    event ClaimedAsInput(
+        uint64 indexed domainBlock,
+        address indexed payee,
+        address tokenIn,
+        uint256 amountIn,
+        uint256 nonce
+    );
+
     error EmptyCiphertext();
     error CiphertextTooLarge();
     error BadGasLimit();
@@ -68,6 +85,7 @@ contract Hub {
     error NotPosted();
     error InvalidProof();
     error AlreadyClaimed();
+    error NotPayee();
 
     constructor(
         IMainBridge bridge_,
@@ -197,5 +215,82 @@ contract Hub {
         claimed[leaf] = true; // effects (and the log) before the external call
         emit Claimed(domainBlock, payee, token, amount, nonce);
         bridge.release(token, payee, amount);
+    }
+
+    // ---------------------------------------------------------------- withdrawal with swap
+
+    /// @notice The terms a payee signed inside the private chain (via requestSwapWithdrawal).
+    ///         `minOut` is the minimum the payee must receive AFTER the relayer fee; `maxFee` is the
+    ///         highest relayer fee they accepted.
+    struct SwapWithdrawal {
+        address payee;
+        address tokenIn;
+        address tokenOut;
+        uint256 amountIn;
+        uint256 minOut;
+        uint256 maxFee;
+        uint256 nonce;
+    }
+
+    /// @notice Leaf hash for a swap withdrawal (kind 2), OpenZeppelin StandardMerkleTree format.
+    ///         Types, in order: (uint8 kind, address payee, address tokenIn, address tokenOut,
+    ///         uint256 amountIn, uint256 minOut, uint256 maxFee, uint256 nonce, bytes32 salt)
+    function swapWithdrawalLeaf(SwapWithdrawal calldata w, bytes32 salt) public pure returns (bytes32) {
+        return keccak256(
+            bytes.concat(
+                keccak256(
+                    abi.encode(
+                        KIND_SWAP_WITHDRAWAL,
+                        w.payee,
+                        w.tokenIn,
+                        w.tokenOut,
+                        w.amountIn,
+                        w.minOut,
+                        w.maxFee,
+                        w.nonce,
+                        salt
+                    )
+                )
+            )
+        );
+    }
+
+    function _verifyAndMark(uint64 domainBlock, bytes32 leaf, bytes32[] calldata proof) private {
+        bytes32 root = results[domainBlock].msgRoot;
+        if (root == bytes32(0)) revert NotPosted();
+        if (!MerkleProof.verifyCalldata(proof, root, leaf)) revert InvalidProof();
+        if (claimed[leaf]) revert AlreadyClaimed();
+        claimed[leaf] = true;
+    }
+
+    /// @notice Pay the payee in `tokenOut` via the bridge's swap adapter, in one transaction.
+    ///         Anyone may call (the relayer does and earns the capped fee). If the swap fails the whole
+    ///         call reverts and the leaf stays unclaimed, so the payee can use claimAsInput.
+    function claimSwap(
+        uint64 domainBlock,
+        SwapWithdrawal calldata w,
+        bytes32 salt,
+        bytes32[] calldata proof
+    ) external {
+        _verifyAndMark(domainBlock, swapWithdrawalLeaf(w, salt), proof);
+        emit ClaimedSwap(domainBlock, w.payee, w.tokenIn, w.tokenOut, w.amountIn, w.nonce);
+        bridge.releaseAndSwap(
+            w.payee, w.tokenIn, w.tokenOut, w.amountIn, w.minOut, w.maxFee, msg.sender
+        );
+    }
+
+    /// @notice Fallback: take the original token instead of swapping. Withdrawals must never be
+    ///         blockable (white paper 5.5.3). Only the payee may call, so a third party cannot force
+    ///         a payee out of their chosen token; the payee pays their own gas here (rare path).
+    function claimAsInput(
+        uint64 domainBlock,
+        SwapWithdrawal calldata w,
+        bytes32 salt,
+        bytes32[] calldata proof
+    ) external {
+        if (msg.sender != w.payee) revert NotPayee();
+        _verifyAndMark(domainBlock, swapWithdrawalLeaf(w, salt), proof);
+        emit ClaimedAsInput(domainBlock, w.payee, w.tokenIn, w.amountIn, w.nonce);
+        bridge.release(w.tokenIn, w.payee, w.amountIn);
     }
 }

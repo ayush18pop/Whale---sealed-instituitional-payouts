@@ -201,9 +201,14 @@ Correction to earlier chat: I quoted Monad block time as 400 ms. The docs state 
 | Receipt `gasUsed` for `Hub.submit` | equals the gas **limit** (100000) | Confirms Monad bills the limit; use tight limits |
 | `Hub.submit` send-to-receipt, 5 samples | median ~3.1 s (1.6-4.2 s) | **Not** chain speed: dominated by `cast send` polling for the receipt. Do not quote. Real inclusion latency is measured with a WebSocket subscription in Phase 2 |
 | Deploy cost (3 contracts + wiring) | ~0.63 MON at ~102 gwei | |
-| Gas for a 50-payee batch on the private chain | ~1.9M | forge test; limit is 30M |
+| Gas, 50-payee batch on the private chain | `propose` 3.40M, executing `approve` 1.90M | backend gas measurement (Monad mode); both under the 30M limit. Earlier text said "~1.9M for a batch": that is only the executing approval |
+| Submission to domain executed (n=10, sequential) | median 747 ms, p95 1151 ms | backend e2e over the WebSocket feed; p95 is the max sample at n=10; includes ~200-250 ms RPC distance from one machine |
+| Submission to result posted on Monad (n=10) | median 1523 ms, p95 2147 ms | same run |
+| Private-chain work per block (n=20) | median 23 ms, p95 28 ms | |
+| `postResult` cost | gas limit 160,000, about 0.016 MON at 102 gwei | earlier estimate of ~0.03 MON was too high |
+| Anvil Monad mode vs plain, 50-payee batch | no measurable difference (~4.9 ms median both) | resolves decision D2: use Monad mode |
 
-Only the block time is a defensible speed figure today.
+Defensible speed figures now: block time about 0.3 s, and the measured submission-to-executed and submission-to-posted medians above (state n=10, one machine, public RPC). Do not state TPS.
 
 ## 8. Functional requirements
 
@@ -237,8 +242,8 @@ Only the block time is a defensible speed figure today.
 |---|---|---|---|
 | 0 | Repo, toolchain, config, interfaces | Lead | `forge test` passes in Monad mode; funded deployer on testnet; `anvil --network monad` verified. **Done up to funding.** |
 | 1 | Contracts: TestUSDC, MainBridge, Hub, DomainToken, Treasury + tests | Lead | All tests in FR6, FR7, FR9 green; deployed to testnet; addresses in `deployments.json`. **Status: code and 67 tests done (FR4-FR7, FR9 covered at contract level; a 50-payee batch executes in ~1.9M gas). **Deployed to Monad testnet on 4 Nov 2026** (TestUSDC, MainBridge, Hub; wiring read back on-chain). Addresses and config: `deployments/monad-testnet.json`.** |
-| 2 | Operator core loop (watch, decrypt, execute, roots, post) | Backend subagent | A script submits an encrypted batch; balances and the posted root are correct |
-| 3 | RPC proxy, relayer, receipt endpoint, event feed | Backend subagent | FR5 and FR8 pass against the running service |
+| 2 | Operator core loop (watch, decrypt, execute, roots, post) | Backend subagent | A script submits an encrypted batch; balances and the posted root are correct. **Status: done; restart-safety tested with two kill -9 runs; e2e 74/74 checks on testnet** |
+| 3 | RPC proxy, relayer, receipt endpoint, event feed | Backend subagent | FR5 and FR8 pass against the running service. **Status: done; API documented in `docs/API.md`** |
 | 4 | Frontend: roles, split screen, timer, Reset (mock data first) | Lead / frontend | The demo script runs by clicking, against mocks |
 | 5 | Integration and hardening | All | FR1-FR11 pass; 5 clean runs; backup video |
 | 6+ | Stretch (section 5) | | Only after phase 5 |

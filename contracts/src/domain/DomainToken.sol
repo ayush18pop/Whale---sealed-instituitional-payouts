@@ -30,6 +30,21 @@ contract DomainToken is ERC20 {
         address indexed payee, address token, uint256 amount, uint256 nonce
     );
 
+    /// @dev The operator turns these into kind-2 Merkle leaves for the Hub (see Hub.swapWithdrawalLeaf).
+    event SwapWithdrawalRequested(
+        address indexed payee,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn,
+        uint256 minOut,
+        uint256 maxFee,
+        uint256 nonce
+    );
+    event PayoutPreferenceSet(address indexed account, address tokenOut);
+
+    mapping(address account => address) private _payoutPreference;
+
+    error BadTokenOut();
     error Denied();
     error NotSystemRelayer();
     error DepositAlreadyProcessed();
@@ -85,6 +100,32 @@ contract DomainToken is ERC20 {
         depositProcessed[depositId] = true;
         _mint(to, amount);
         emit DepositMinted(depositId, to, amount);
+    }
+
+    /// @notice Withdraw and receive a DIFFERENT token on Monad (claim-and-swap, PRD 6.1).
+    /// @param tokenOut The Monad token the payee wants.
+    /// @param minOut Minimum the payee will receive after the relayer fee.
+    /// @param maxFee Highest relayer fee the payee accepts, in `tokenOut` units.
+    function requestSwapWithdrawal(uint256 amount, address tokenOut, uint256 minOut, uint256 maxFee)
+        external
+        returns (uint256 nonce)
+    {
+        if (amount == 0) revert ZeroAmount();
+        if (tokenOut == address(0) || tokenOut == monadToken) revert BadTokenOut();
+        _burn(msg.sender, amount);
+        nonce = withdrawalNonce[msg.sender]++;
+        emit SwapWithdrawalRequested(msg.sender, monadToken, tokenOut, amount, minOut, maxFee, nonce);
+    }
+
+    /// @notice Remember which token the caller prefers to be paid out in (UI pre-fill; private state).
+    function setPayoutPreference(address tokenOut) external {
+        _payoutPreference[msg.sender] = tokenOut;
+        emit PayoutPreferenceSet(msg.sender, tokenOut);
+    }
+
+    function payoutPreference(address account) external view returns (address) {
+        if (!_canRead(account)) revert Denied();
+        return _payoutPreference[account];
     }
 
     /// @notice Burn the caller's tokens and queue a withdrawal to the same address on Monad.
